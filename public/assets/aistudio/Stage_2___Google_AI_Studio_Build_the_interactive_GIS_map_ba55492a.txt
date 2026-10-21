@@ -1,0 +1,14 @@
+Extend the existing Central Province infrastructure application by building an interactive GIS map.
+
+Include:
+- Google Maps integration, configured to use an environment variable for the API key.
+- Asset markers and selectable layers for roads, bridges, culverts, drainage and defects.
+- Search and filters for district, LLG, asset type, condition and priority.
+- Map zoom, pan, marker selection and asset information panels.
+- A legend showing asset categories and condition classifications.
+- A list view of assets corresponding to the visible map results.
+- A clear loading state and an informative fallback if the Google Maps API is unavailable.
+
+Use demonstration coordinates only for sample assets and label them clearly as illustrative. Do not fabricate actual road alignments, administrative boundaries or surveyed asset locations.
+
+Keep map rendering separate from asset data and prepare a provider-independent GIS data interface for future integration with authoritative GIS datasets.

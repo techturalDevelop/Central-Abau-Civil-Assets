@@ -1,0 +1,6 @@
+{
+  "name": "Central Province Infrastructure & Asset Management",
+  "description": "Strategic GIS mapping, asset register, defect inspection, and maintenance prioritization platform for Central Province Government (Rigo and Abau Districts).",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

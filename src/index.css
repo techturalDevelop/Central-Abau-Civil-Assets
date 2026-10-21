@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+html, body {
+  background-color: #020617;
+  color: #f8fafc;
+}
+
+@layer utilities {
+  @media print {
+    @page {
+      size: A4 portrait;
+      margin: 12mm 10mm 12mm 10mm;
+    }
+
+    body {
+      background: #ffffff !important;
+      color: #0f172a !important;
+      font-size: 10pt;
+    }
+
+    .no-print {
+      display: none !important;
+    }
+
+    .print-only {
+      display: block !important;
+    }
+
+    .page-break-before {
+      page-break-before: always !important;
+      break-before: page !important;
+    }
+
+    .page-break-after {
+      page-break-after: always !important;
+      break-after: page !important;
+    }
+
+    .avoid-break-inside {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+
+    /* Remove shadows, background dark colors */
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+    }
+  }
+}
+
+/* Custom scrollbars for dense GIS and data panels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #090d16;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}

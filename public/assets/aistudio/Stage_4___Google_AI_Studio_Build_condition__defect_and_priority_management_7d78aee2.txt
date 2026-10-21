@@ -1,0 +1,17 @@
+Extend the application with Infrastructure Condition Assessment, Defect Management and Maintenance Prioritisation.
+
+Allow users to record inspections and defects against individual assets.
+
+Include:
+- Condition ratings: Good, Fair, Poor and Critical.
+- Defect type, description, severity, location and photographs.
+- Inspection date, inspector and supporting notes.
+- Recommended maintenance action.
+- Maintenance priority and target completion date.
+- Defect status: Open, Assigned, In Progress, Resolved and Verified.
+
+Implement a transparent, configurable priority scoring model using condition, defect severity, safety risk, infrastructure importance and service disruption. Display the factors contributing to each priority.
+
+Allow authorised users to review and override recommendations with a recorded reason.
+
+Clearly distinguish demonstration recommendations from verified engineering assessments. Do not present automated scores as certified structural safety decisions.

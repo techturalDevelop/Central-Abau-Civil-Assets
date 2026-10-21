@@ -1,0 +1,19 @@
+This are the updated asset image links for the asset register.
+
+- CP-ABU-BRG-001 URL Image :https://pub-d244eff0ad524eccbaae907a70af6b3d.r2.dev/digital%20transformation%20hub/Central%20GIS%20CW/Central%20Province-ABAU%2002.png
+- CP-ABU-BRG-004 URL Image:https://pub-d244eff0ad524eccbaae907a70af6b3d.r2.dev/digital%20transformation%20hub/Central%20GIS%20CW/Central%20Province-ABAU%2008.jpg
+- CP-ABU-BRG-009 URL Image:https://pub-d244eff0ad524eccbaae907a70af6b3d.r2.dev/digital%20transformation%20hub/Central%20GIS%20CW/Central%20Province-ABAU%2008.jpg
+- CP-ABU-BRG-012 URL Image:https://pub-d244eff0ad524eccbaae907a70af6b3d.r2.dev/digital%20transformation%20hub/Central%20GIS%20CW/Central%20Province-ABAU%2002.png
+
+- CP-ABU-CSW-008 URL Image:https://pub-d244eff0ad524eccbaae907a70af6b3d.r2.dev/digital%20transformation%20hub/Central%20GIS%20CW/Central%20Province-ABAU%2006.jpg
+- CP-ABU-CSW-010 URL Image:https://pub-d244eff0ad524eccbaae907a70af6b3d.r2.dev/digital%20transformation%20hub/Central%20GIS%20CW/Central%20Province-ABAU%2006.jpg
+- CP-ABU-CUL-003 URL Image:https://pub-d244eff0ad524eccbaae907a70af6b3d.r2.dev/digital%20transformation%20hub/Central%20GIS%20CW/Central%20Province-ABAU%2010.jpeg
+- CP-ABU-CUL-006 URL Image:https://pub-d244eff0ad524eccbaae907a70af6b3d.r2.dev/digital%20transformation%20hub/Central%20GIS%20CW/Central%20Province-ABAU%2010.jpeg
+- CP-ABU-RD-001 URL Image:https://pub-d244eff0ad524eccbaae907a70af6b3d.r2.dev/digital%20transformation%20hub/Central%20GIS%20CW/Central%20Province-ABAU%2004.jpg
+- CP-ABU-RD-002 URL Image:https://pub-d244eff0ad524eccbaae907a70af6b3d.r2.dev/digital%20transformation%20hub/Central%20GIS%20CW/Central%20Province-ABAU%2011.jpeg
+- CP-ABU-RD-005 URL Image:https://pub-d244eff0ad524eccbaae907a70af6b3d.r2.dev/digital%20transformation%20hub/Central%20GIS%20CW/Central%20Province-ABAU%2004.jpg
+- CP-ABU-RD-007 URL Image:https://pub-d244eff0ad524eccbaae907a70af6b3d.r2.dev/digital%20transformation%20hub/Central%20GIS%20CW/Central%20Province-ABAU%2003.jpg
+- CP-ABU-RD-011 URL Image:https://pub-d244eff0ad524eccbaae907a70af6b3d.r2.dev/digital%20transformation%20hub/Central%20GIS%20CW/Central%20Province-ABAU%2004.jpg
+
+
+

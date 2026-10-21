@@ -1,0 +1,14 @@
+Build a responsive web application called **Central Province Digital Infrastructure & Asset Management System**.
+
+Create a professional government-grade dashboard for monitoring roads, bridges, culverts, drainage, infrastructure condition, defects and maintenance priorities.
+
+Include:
+- Sidebar navigation for Dashboard, GIS Map, Asset Register, Inspections, Defects, Maintenance, Reports and Settings.
+- Summary cards for total assets, assets in poor condition, open defects and high-priority maintenance.
+- Infrastructure condition and defect summary charts.
+- Recent inspections and maintenance activity.
+- Search, filtering and date-range controls.
+- Clean, modern, professional government interface.
+- Desktop, tablet and mobile layouts.
+
+Use realistic but clearly labelled demonstration data. Do not invent real Central Province infrastructure statistics. Make navigation and dashboard interactions functional. Organise the code into reusable components and prepare the application for future GIS and database integration.

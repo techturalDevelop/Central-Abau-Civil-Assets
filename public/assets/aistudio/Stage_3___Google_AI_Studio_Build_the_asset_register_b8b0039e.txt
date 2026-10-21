@@ -1,0 +1,19 @@
+Extend the application with a complete Infrastructure Asset Register.
+
+Create records for roads, bridges, culverts and drainage assets.
+
+Each asset must support:
+- Unique Asset ID.
+- Asset type and name.
+- Province, district, LLG and location.
+- Latitude and longitude.
+- Description and technical characteristics.
+- Condition classification and condition score.
+- Defects and risk classification.
+- Maintenance priority and recommended action.
+- Last inspection and next inspection date.
+- Photographs, supporting documents and maintenance history.
+
+Provide searchable, sortable asset tables and asset creation, viewing, editing and archiving workflows. Validate required fields and prevent duplicate asset IDs.
+
+Use a reusable data model and clearly labelled demonstration records. Prepare the application for persistent database storage; do not claim that data is permanently saved until a database is connected and tested.
