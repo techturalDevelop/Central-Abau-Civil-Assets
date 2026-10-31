@@ -14,6 +14,7 @@ import { QuickFieldCaptureModal } from './components/QuickFieldCaptureModal';
 import { SyncQueueDrawer } from './components/SyncQueueDrawer';
 import { PdfExportModal } from './components/PdfExportModal';
 import { ModuleSelectionModal } from './components/ModuleSelectionModal';
+import { ToastContainer } from './components/ToastContainer';
 
 const AppContent: React.FC = () => {
   const {
@@ -69,6 +70,9 @@ const AppContent: React.FC = () => {
         isOpen={isModuleSelectModalOpen}
         onClose={() => setIsModuleSelectModalOpen(false)}
       />
+
+      {/* Modern In-App Toast System */}
+      <ToastContainer />
     </div>
   );
 };

@@ -1,0 +1,56 @@
+Inspect the current build first, identify improvements that fit it, and work through changes in stages as per my uploaded file.
+
+
+App and Website Improvement Prompt
+
+Act as a product designer, UX researcher, frontend and backend engineer, and application security reviewer. Improve the app or website that is currently open in this Google AI Studio project.
+
+## Ground rules
+
+- Start by reviewing the current build, its files, features, design, and technical structure. Base recommendations on what is actually present.
+- Preserve the app’s purpose, working features, existing design direction, and technology choices unless there is a clear reason to change them.
+- Do not invent requirements, credentials, APIs, user data, or product behavior. Call out anything that needs clarification.
+- Prioritize improvements by user impact, effort, risk, and dependencies. Distinguish essential fixes from optional ideas.
+- Protect existing data and working functionality. Keep changes focused, explain significant decisions, and flag any destructive or security-sensitive change before making it.
+- Do not expose secrets or place private credentials in frontend code. Use the project’s existing secure patterns where possible.
+- If the project cannot support a recommendation as-is, explain what is missing and suggest a practical alternative.
+
+## Stage 1 — Review the current build
+
+Inspect the app and report:
+
+1. What the product appears to do, who it serves, and its main user journeys.
+2. What currently works and what appears incomplete, confusing, inconsistent, or broken.
+3. Findings for:
+   - **UI:** visual hierarchy, layout, typography, color, responsive behavior, and consistency.
+   - **UX:** navigation, onboarding, forms, feedback, accessibility, empty states, errors, and task completion.
+   - **Features and functions:** missing or unreliable capabilities, edge cases, and useful enhancements.
+   - **Frontend:** component structure, state handling, loading and error behavior, responsiveness, and maintainability.
+   - **Backend and data flows:** APIs, validation, persistence, authentication, authorization, retries, error handling, and frontend-to-backend loops, where applicable.
+   - **Security and privacy:** input handling, access control, secret management, data exposure, dependency or configuration risks, and abuse cases relevant to this project.
+4. Any assumptions or limitations in the review.
+
+Do not modify the project during this stage.
+
+## Stage 2 — Create a prioritized improvement plan
+
+Present a concise table with these columns:
+
+| Priority | Area | Current issue or opportunity | Proposed improvement | User benefit | Effort | Risk or dependency |
+|---|---|---|---|---|---|---|
+
+Group related work into stages, ordered by dependency and value. Include only recommendations that fit the current build. For each stage, state its goal, affected areas, expected outcome, and how the result can be checked.
+
+## Stage 3 — Implement improvements in stages
+
+After presenting the review and plan, ask me which stage to implement first. Implement only the stage I select, keeping the changes focused and consistent with the existing project.
+
+For each selected stage:
+
+1. Briefly state the intended changes and files or components likely to be affected.
+2. Make the changes while preserving unrelated working behavior.
+3. Check the result using the project’s available preview, diagnostics, or verification tools. Do not claim something was tested if it was not.
+4. Summarize what changed, what you checked, any remaining issues, and the next recommended stage.
+5. Wait for my direction before starting another stage.
+
+If a necessary requirement is unclear, ask a specific question and continue with independent work that does not depend on the answer.

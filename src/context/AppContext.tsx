@@ -20,6 +20,8 @@ import {
   HealthEmergencyIncident,
   FieldReliefRequest,
   ElNinoBudgetSummary,
+  ToastNotification,
+  ToastType,
 } from '../types';
 import {
   DEFAULT_WEIGHTS,
@@ -107,6 +109,11 @@ interface AppContextType {
   setIsSyncDrawerOpen: (open: boolean) => void;
   isPdfStudioOpen: boolean;
   setIsPdfStudioOpen: (open: boolean) => void;
+
+  // Toast Notifications
+  toasts: ToastNotification[];
+  notifyToast: (type: ToastType, title: string, message?: string) => void;
+  removeToast: (id: string) => void;
 
   // El Niño Relief Program State & Handlers (Abau District)
   elNinoLlgStatuses: Record<string, ElNinoLlgStatus>;
@@ -242,6 +249,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem(STORAGE_KEYS.ROLE);
     return (saved as UserRole) || 'Chief District Engineer';
   });
+
+  // In-App Toast Notification State
+  const [toasts, setToasts] = useState<ToastNotification[]>([]);
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  const notifyToast = (type: ToastType, title: string, message?: string) => {
+    const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const newToast: ToastNotification = { id, type, title, message, timestamp: Date.now() };
+    setToasts(prev => [newToast, ...prev].slice(0, 5));
+    // Auto remove after 4.5 seconds
+    setTimeout(() => {
+      removeToast(id);
+    }, 4500);
+  };
 
   // Track online status changes
   useEffect(() => {
@@ -717,6 +741,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsSyncDrawerOpen,
         isPdfStudioOpen,
         setIsPdfStudioOpen,
+        toasts,
+        notifyToast,
+        removeToast,
         coreModule,
         setCoreModule,
         isModuleSelectModalOpen,

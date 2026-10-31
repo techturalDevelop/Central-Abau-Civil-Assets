@@ -9,8 +9,12 @@ import {
   X,
   Compass,
   WifiOff,
+  Navigation,
+  RefreshCw,
+  Edit2,
 } from 'lucide-react';
 import { ConditionRating, DefectSeverity } from '../types';
+import { ABAU_VILLAGES } from '../data/abauVillages';
 
 export const QuickFieldCaptureModal: React.FC = () => {
   const {
@@ -20,15 +24,20 @@ export const QuickFieldCaptureModal: React.FC = () => {
     addInspection,
     addDefect,
     isOffline,
+    notifyToast,
   } = useApp();
 
   const [captureType, setCaptureType] = useState<'inspection' | 'defect'>('inspection');
   const [selectedAssetId, setSelectedAssetId] = useState<string>(assets[0]?.id || '');
+
+  // GPS & Location States
   const [currentGps, setCurrentGps] = useState<{ lat: string; lng: string }>({
-    lat: '-9.8250',
-    lng: '147.5850',
+    lat: '-10.1580',
+    lng: '148.6420',
   });
-  const [gpsStatus, setGpsStatus] = useState<'locating' | 'locked' | 'fallback'>('locating');
+  const [gpsStatus, setGpsStatus] = useState<'locating' | 'locked' | 'fallback' | 'manual'>('locating');
+  const [isManualGpsMode, setIsManualGpsMode] = useState(false);
+  const [selectedWaypointId, setSelectedWaypointId] = useState<string>('');
 
   // Inspection quick fields
   const [conditionScore, setConditionScore] = useState<number>(55);
@@ -40,9 +49,15 @@ export const QuickFieldCaptureModal: React.FC = () => {
 
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
 
+  // Attempt GPS acquisition when opened
   useEffect(() => {
     if (!isQuickCaptureOpen) return;
 
+    acquireGps();
+  }, [isQuickCaptureOpen]);
+
+  const acquireGps = () => {
+    setGpsStatus('locating');
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         pos => {
@@ -51,16 +66,44 @@ export const QuickFieldCaptureModal: React.FC = () => {
             lng: pos.coords.longitude.toFixed(6),
           });
           setGpsStatus('locked');
+          setIsManualGpsMode(false);
         },
-        err => {
+        _err => {
+          // If geolocation fails or is denied (e.g. in remote bush/offline), use target asset coordinates
+          const defaultAsset = assets.find(a => a.id === selectedAssetId) || assets[0];
+          if (defaultAsset && defaultAsset.coordinates) {
+            setCurrentGps({
+              lat: defaultAsset.coordinates[0].toFixed(6),
+              lng: defaultAsset.coordinates[1].toFixed(6),
+            });
+          }
           setGpsStatus('fallback');
         },
-        { enableHighAccuracy: true, timeout: 5000 }
+        { enableHighAccuracy: true, timeout: 6000 }
       );
     } else {
       setGpsStatus('fallback');
     }
-  }, [isQuickCaptureOpen]);
+  };
+
+  // Handler for snapping to known Abau village / locality
+  const handleWaypointSelect = (villageIdStr: string) => {
+    setSelectedWaypointId(villageIdStr);
+    if (!villageIdStr) return;
+    const village = ABAU_VILLAGES.find(v => v.id.toString() === villageIdStr);
+    if (village) {
+      setCurrentGps({
+        lat: village.lat.toFixed(6),
+        lng: village.lng.toFixed(6),
+      });
+      setGpsStatus('manual');
+      notifyToast(
+        'info',
+        'Coordinates Snapped',
+        `Position snapped to ${village.name} (${village.llg}).`
+      );
+    }
+  };
 
   if (!isQuickCaptureOpen) return null;
 
@@ -105,7 +148,9 @@ export const QuickFieldCaptureModal: React.FC = () => {
         photos: targetAsset.photos || [],
       });
 
-      setSubmittedMessage(`Field inspection saved locally! Staged for sync.`);
+      const msg = `Inspection for ${targetAsset.id} recorded (${isOffline ? 'Offline Queue' : 'Central Registry'}).`;
+      setSubmittedMessage(msg);
+      notifyToast('success', 'Inspection Saved', msg);
     } else {
       addDefect({
         assetId: targetAsset.id,
@@ -126,18 +171,20 @@ export const QuickFieldCaptureModal: React.FC = () => {
         photos: targetAsset.photos || [],
       });
 
-      setSubmittedMessage(`Defect report saved! Staged for sync.`);
+      const msg = `Defect ${defectType} logged on ${targetAsset.id}.`;
+      setSubmittedMessage(msg);
+      notifyToast('warning', 'Defect Logged', msg);
     }
 
     setTimeout(() => {
       setSubmittedMessage(null);
       setIsQuickCaptureOpen(false);
-    }, 1500);
+    }, 1200);
   };
 
   return (
     <div className="fixed inset-0 z-[1100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
@@ -145,12 +192,13 @@ export const QuickFieldCaptureModal: React.FC = () => {
             </div>
             <div>
               <h3 className="text-base font-bold text-white">Mobile Field Capture</h3>
-              <p className="text-[11px] text-slate-400">GPS-enabled rapid patrol reconnaissance</p>
+              <p className="text-[11px] text-slate-400">GPS & offline-ready corridor reconnaissance</p>
             </div>
           </div>
           <button
             onClick={() => setIsQuickCaptureOpen(false)}
-            className="text-slate-400 hover:text-white text-xl font-bold"
+            className="text-slate-400 hover:text-white text-xl font-bold p-1 cursor-pointer"
+            aria-label="Close modal"
           >
             &times;
           </button>
@@ -163,22 +211,120 @@ export const QuickFieldCaptureModal: React.FC = () => {
             </div>
             <h4 className="text-sm font-bold text-white">{submittedMessage}</h4>
             <p className="text-xs text-slate-400">
-              {isOffline ? 'Record stored in local offline queue.' : 'Record sent to Central Province registry.'}
+              {isOffline ? 'Record stored in local offline queue.' : 'Record synchronized with Central Province registry.'}
             </p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-            {/* GPS Status Box */}
-            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-slate-300 font-mono text-[11px]">
-                  {currentGps.lat}°, {currentGps.lng}°
-                </span>
+            {/* GPS & Spatial Status Section */}
+            <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full ${
+                      gpsStatus === 'locked'
+                        ? 'bg-emerald-500 animate-pulse'
+                        : gpsStatus === 'locating'
+                        ? 'bg-amber-400 animate-ping'
+                        : 'bg-blue-400'
+                    }`}
+                  />
+                  <span className="text-slate-200 font-mono text-[11px] font-bold">
+                    {currentGps.lat}°, {currentGps.lng}°
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`text-[9.5px] px-2 py-0.5 rounded font-mono font-bold uppercase ${
+                      gpsStatus === 'locked'
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : gpsStatus === 'locating'
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                    }`}
+                  >
+                    {gpsStatus === 'locked'
+                      ? 'GPS Locked'
+                      : gpsStatus === 'locating'
+                      ? 'Locating...'
+                      : gpsStatus === 'manual'
+                      ? 'Snapped Coords'
+                      : 'Fallback Coords'}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={acquireGps}
+                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+                    title="Retry GPS acquisition"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              <span className="text-[10px] text-amber-400 font-semibold uppercase">
-                {gpsStatus === 'locked' ? 'GPS Locked' : 'Central GPS'}
-              </span>
+
+              {/* Waypoint Snap & Manual Fallback Bar */}
+              <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row gap-2">
+                <div className="flex-1">
+                  <label className="text-[10px] text-slate-400 block mb-0.5">
+                    Snap Coordinates to Known Locality:
+                  </label>
+                  <select
+                    value={selectedWaypointId}
+                    onChange={e => handleWaypointSelect(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="">-- Choose Abau Village / Locality --</option>
+                    {ABAU_VILLAGES.slice(0, 35).map(v => (
+                      <option key={v.id} value={v.id.toString()}>
+                        {v.name} ({v.llg})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="sm:w-auto flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsManualGpsMode(prev => !prev)}
+                    className="w-full px-2.5 py-1 text-[11px] rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Edit2 className="w-3 h-3 text-amber-400" />
+                    <span>{isManualGpsMode ? 'Hide Manual' : 'Manual Coords'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Manual Input Fields when toggled */}
+              {isManualGpsMode && (
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/60">
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">Latitude (WGS84)</label>
+                    <input
+                      type="text"
+                      value={currentGps.lat}
+                      onChange={e => {
+                        setCurrentGps(prev => ({ ...prev, lat: e.target.value }));
+                        setGpsStatus('manual');
+                      }}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-slate-200 font-mono text-xs focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">Longitude (WGS84)</label>
+                    <input
+                      type="text"
+                      value={currentGps.lng}
+                      onChange={e => {
+                        setCurrentGps(prev => ({ ...prev, lng: e.target.value }));
+                        setGpsStatus('manual');
+                      }}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-slate-200 font-mono text-xs focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Mode Toggle: Inspection vs Defect */}
@@ -186,24 +332,26 @@ export const QuickFieldCaptureModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCaptureType('inspection')}
-                className={`py-2 rounded-lg transition-all ${
+                className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                   captureType === 'inspection'
-                    ? 'bg-amber-500 text-slate-950'
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-md'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Log Inspection
+                <ClipboardCheck className="w-4 h-4" />
+                <span>Log Inspection</span>
               </button>
               <button
                 type="button"
                 onClick={() => setCaptureType('defect')}
-                className={`py-2 rounded-lg transition-all ${
+                className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                   captureType === 'defect'
-                    ? 'bg-rose-600 text-white'
+                    ? 'bg-rose-600 text-white font-bold shadow-md'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Report Defect
+                <AlertTriangle className="w-4 h-4" />
+                <span>Report Defect</span>
               </button>
             </div>
 
@@ -212,12 +360,21 @@ export const QuickFieldCaptureModal: React.FC = () => {
               <label className="block text-slate-300 font-semibold mb-1">Target Asset Location</label>
               <select
                 value={selectedAssetId}
-                onChange={e => setSelectedAssetId(e.target.value)}
+                onChange={e => {
+                  setSelectedAssetId(e.target.value);
+                  const chosen = assets.find(a => a.id === e.target.value);
+                  if (chosen && chosen.coordinates && gpsStatus !== 'locked') {
+                    setCurrentGps({
+                      lat: chosen.coordinates[0].toFixed(6),
+                      lng: chosen.coordinates[1].toFixed(6),
+                    });
+                  }
+                }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 font-semibold"
               >
                 {assets.map(a => (
                   <option key={a.id} value={a.id}>
-                    {a.id} — {a.name} ({a.district})
+                    {a.id} — {a.name} ({a.llg || a.district})
                   </option>
                 ))}
               </select>
@@ -228,7 +385,26 @@ export const QuickFieldCaptureModal: React.FC = () => {
               <div className="space-y-3 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-300 font-semibold">Condition Score:</span>
-                  <span className="text-amber-400 font-mono font-bold">{conditionScore} / 100</span>
+                  <span
+                    className={`font-mono font-bold px-2 py-0.5 rounded text-xs ${
+                      conditionScore >= 70
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : conditionScore >= 50
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        : conditionScore >= 35
+                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                        : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                    }`}
+                  >
+                    {conditionScore} / 100 &bull;{' '}
+                    {conditionScore >= 70
+                      ? 'Good'
+                      : conditionScore >= 50
+                      ? 'Fair'
+                      : conditionScore >= 35
+                      ? 'Poor'
+                      : 'Critical'}
+                  </span>
                 </div>
                 <input
                   type="range"
@@ -258,15 +434,15 @@ export const QuickFieldCaptureModal: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Severity</label>
+                  <label className="block text-slate-300 font-semibold mb-1">Severity Rating</label>
                   <select
                     value={severity}
                     onChange={e => setSeverity(e.target.value as any)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 font-bold"
                   >
-                    <option value="Critical">Critical (Imminent Washout / Bridge Closed)</option>
-                    <option value="Severe">Severe (Major Hazard to PMVs)</option>
-                    <option value="Moderate">Moderate (Progressive Damage)</option>
+                    <option value="Critical">Critical (Imminent Washout / Road Severed)</option>
+                    <option value="Severe">Severe (Major Hazard to PMVs & Logistics)</option>
+                    <option value="Moderate">Moderate (Progressive Deterioration)</option>
                     <option value="Minor">Minor (Routine Defect)</option>
                   </select>
                 </div>
@@ -278,7 +454,7 @@ export const QuickFieldCaptureModal: React.FC = () => {
               <textarea
                 rows={2}
                 required
-                placeholder="Observed damage, impassable depth, or timber plank breakage..."
+                placeholder="Observed damage, impassable depth, timber plank breakage..."
                 value={quickNotes}
                 onChange={e => setQuickNotes(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-amber-500"
@@ -289,13 +465,13 @@ export const QuickFieldCaptureModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsQuickCaptureOpen(false)}
-                className="px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold"
+                className="px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white font-semibold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-lg"
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-lg cursor-pointer"
               >
                 Save {isOffline ? 'Offline' : 'to Registry'}
               </button>

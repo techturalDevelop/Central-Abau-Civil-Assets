@@ -36,6 +36,7 @@ export const InspectionsView: React.FC = () => {
     selectedAssetId,
     isOffline,
     currentUserRole,
+    notifyToast,
   } = useApp();
 
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
@@ -119,6 +120,12 @@ export const InspectionsView: React.FC = () => {
           'https://images.unsplash.com/photo-1545558014-8692077e9b5c?auto=format&fit=crop&w=800&q=80',
       ],
     });
+
+    notifyToast(
+      'success',
+      'Inspection Recorded',
+      `Condition ${rating} (${overallCalculatedScore}/100) logged for ${asset.name}.`
+    );
 
     setIsRecordModalOpen(false);
   };

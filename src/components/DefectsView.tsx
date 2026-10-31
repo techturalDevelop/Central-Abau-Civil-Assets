@@ -31,6 +31,7 @@ export const DefectsView: React.FC = () => {
     selectedAssetId,
     isOffline,
     currentUserRole,
+    notifyToast,
   } = useApp();
 
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -61,7 +62,7 @@ export const DefectsView: React.FC = () => {
     const asset = assets.find(a => a.id === targetAssetId);
     if (!asset) return;
 
-    addDefect({
+    const newDef = addDefect({
       assetId: asset.id,
       assetName: asset.name,
       assetType: asset.type,
@@ -84,6 +85,12 @@ export const DefectsView: React.FC = () => {
       ],
     });
 
+    notifyToast(
+      'warning',
+      'Defect Incident Logged',
+      `${defectType} reported for ${asset.name}. Staged in register.`
+    );
+
     setIsLogModalOpen(false);
   };
 
@@ -92,6 +99,11 @@ export const DefectsView: React.FC = () => {
     if (!verifyingDefect) return;
 
     updateDefectStatus(verifyingDefect.id, 'Verified', verificationNotes);
+    notifyToast(
+      'success',
+      'Defect Verified & Certified',
+      `Defect ${verifyingDefect.id} signed off by ${currentUserRole}.`
+    );
     setVerifyingDefect(null);
     setVerificationNotes('');
   };

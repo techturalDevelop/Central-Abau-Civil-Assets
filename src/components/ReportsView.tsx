@@ -249,28 +249,52 @@ export const ReportsView: React.FC = () => {
           </h3>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border border-slate-800 print:border-slate-300 rounded-xl overflow-hidden">
-              <thead className="bg-slate-950 print:bg-slate-200 text-slate-400 print:text-slate-800 font-bold text-[10px] uppercase">
+            <table className="w-full text-left text-xs border border-slate-800 print:border-slate-300 rounded-xl overflow-hidden table-fixed border-collapse">
+              <thead className="bg-slate-950 print:bg-slate-100 text-slate-400 print:text-slate-800 font-bold text-[10px] uppercase border-b border-slate-800 print:border-slate-300">
                 <tr>
-                  <th className="p-2.5">Asset ID</th>
-                  <th className="p-2.5">Asset Name</th>
-                  <th className="p-2.5">District</th>
-                  <th className="p-2.5">Condition</th>
-                  <th className="p-2.5">Priority</th>
-                  <th className="p-2.5">Recommended Intervention</th>
+                  <th style={{ width: '15%' }} className="p-2.5 border-r border-slate-800 print:border-slate-300">Asset ID</th>
+                  <th style={{ width: '25%' }} className="p-2.5 border-r border-slate-800 print:border-slate-300">Asset Name</th>
+                  <th style={{ width: '12%' }} className="p-2.5 border-r border-slate-800 print:border-slate-300">LLG / District</th>
+                  <th style={{ width: '14%' }} className="p-2.5 border-r border-slate-800 print:border-slate-300">Condition</th>
+                  <th style={{ width: '12%' }} className="p-2.5 border-r border-slate-800 print:border-slate-300">Priority</th>
+                  <th style={{ width: '22%' }} className="p-2.5">Recommended Intervention</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800 print:divide-slate-300">
+              <tbody className="divide-y divide-slate-800 print:divide-slate-300 text-[11px]">
                 {criticalAssets.map(a => (
-                  <tr key={a.id} className="text-[11px]">
-                    <td className="p-2.5 font-mono font-bold text-amber-400 print:text-slate-900">{a.id}</td>
-                    <td className="p-2.5 font-semibold text-slate-200 print:text-slate-900">{a.name}</td>
-                    <td className="p-2.5 text-slate-400 print:text-slate-700">{a.district}</td>
-                    <td className="p-2.5 font-bold text-rose-400 print:text-rose-700">
-                      {a.conditionClassification} ({a.conditionScore})
+                  <tr key={a.id} className="hover:bg-slate-950/50 print:hover:bg-transparent">
+                    <td className="p-2.5 font-mono font-bold text-amber-400 print:text-slate-900 border-r border-slate-800 print:border-slate-300 align-top break-words">
+                      {a.id}
                     </td>
-                    <td className="p-2.5 font-bold text-amber-400 print:text-amber-800">{a.maintenancePriority}</td>
-                    <td className="p-2.5 text-slate-300 print:text-slate-700">{a.recommendedAction}</td>
+                    <td className="p-2.5 font-semibold text-slate-200 print:text-slate-900 border-r border-slate-800 print:border-slate-300 align-top break-words">
+                      <div>{a.name}</div>
+                      <div className="text-[10px] text-slate-400 font-mono mt-0.5 print:text-slate-500">{a.code}</div>
+                    </td>
+                    <td className="p-2.5 text-slate-400 print:text-slate-700 border-r border-slate-800 print:border-slate-300 align-top break-words">
+                      <div>{a.llg}</div>
+                      <div className="text-[10px] text-slate-500 font-semibold">{a.district}</div>
+                    </td>
+                    <td className="p-2.5 border-r border-slate-800 print:border-slate-300 align-top">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold inline-block ${
+                        a.conditionClassification === 'Critical'
+                          ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30 print:bg-rose-100 print:text-rose-900 print:border-rose-300'
+                          : a.conditionClassification === 'Poor'
+                          ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 print:bg-orange-100 print:text-orange-900 print:border-orange-300'
+                          : a.conditionClassification === 'Fair'
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 print:bg-amber-100 print:text-amber-900 print:border-amber-300'
+                          : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 print:bg-emerald-100 print:text-emerald-900 print:border-emerald-300'
+                      }`}>
+                        {a.conditionClassification} ({a.conditionScore})
+                      </span>
+                    </td>
+                    <td className="p-2.5 border-r border-slate-800 print:border-slate-300 align-top">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold inline-block bg-rose-500/20 text-rose-300 border border-rose-500/30 print:bg-rose-100 print:text-rose-900 print:border-rose-300">
+                        {a.maintenancePriority}
+                      </span>
+                    </td>
+                    <td className="p-2.5 text-slate-300 print:text-slate-700 align-top break-words leading-relaxed">
+                      {a.recommendedAction}
+                    </td>
                   </tr>
                 ))}
               </tbody>

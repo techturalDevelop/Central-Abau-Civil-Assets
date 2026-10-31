@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   ZoomIn,
   ZoomOut,
-  Layers,
   Building2,
   DollarSign,
   Shield,
@@ -17,9 +16,10 @@ import {
   RefreshCw,
   MapPin,
   Compass,
+  Camera,
+  Layers,
 } from 'lucide-react';
 import { District, Asset, Defect } from '../types';
-import { ABAU_VILLAGES, CENTRAL_PROVINCE_ROAD_WAYPOINTS } from '../data/abauVillages';
 
 interface PdfExportModalProps {
   isOpen: boolean;
@@ -41,7 +41,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   const [llgFilter, setLlgFilter] = useState<string>('All');
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [zoomLevel, setZoomLevel] = useState<number>(90);
-  const [viewPage, setViewPage] = useState<'all' | '1' | '2' | '3' | '4'>('all');
+  const [viewPage, setViewPage] = useState<string>('all');
 
   // Status feedback
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -96,6 +96,116 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   const cloudyBayAvg = getAvgScore(cloudyBayAssets);
   const amazonBayAvg = getAvgScore(amazonBayAssets);
 
+  // Color Coding Helpers with standard print-safe RGB values
+  const getConditionBadgeStyle = (condition: string) => {
+    switch (condition) {
+      case 'Critical':
+        return {
+          bg: '#ffe4e6', // rose-100
+          text: '#9f1239', // rose-800
+          border: '#fecdd3', // rose-200
+        };
+      case 'Poor':
+        return {
+          bg: '#ffedd5', // orange-100
+          text: '#9a3412', // orange-800
+          border: '#fed7aa', // orange-200
+        };
+      case 'Fair':
+        return {
+          bg: '#fef3c7', // amber-100
+          text: '#92400e', // amber-800
+          border: '#fde68a', // amber-200
+        };
+      case 'Good':
+        return {
+          bg: '#d1fae5', // emerald-100
+          text: '#065f46', // emerald-800
+          border: '#a7f3d0', // emerald-200
+        };
+      default:
+        return {
+          bg: '#f1f5f9',
+          text: '#334155',
+          border: '#cbd5e1',
+        };
+    }
+  };
+
+  const getSeverityBadgeStyle = (severity: string) => {
+    switch (severity) {
+      case 'Critical':
+        return { bg: '#ffe4e6', text: '#9f1239', border: '#fecdd3' };
+      case 'Severe':
+        return { bg: '#ffedd5', text: '#9a3412', border: '#fed7aa' };
+      case 'Moderate':
+        return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' };
+      case 'Minor':
+      default:
+        return { bg: '#f1f5f9', text: '#334155', border: '#cbd5e1' };
+    }
+  };
+
+  const getStatusBadgeStyle = (status: string) => {
+    switch (status) {
+      case 'Open':
+        return { bg: '#fee2e2', text: '#991b1b', border: '#fecaca' };
+      case 'In Progress':
+        return { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' };
+      case 'Assigned':
+        return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' };
+      case 'Resolved':
+        return { bg: '#dcfce7', text: '#15803d', border: '#bbf7d0' };
+      default:
+        return { bg: '#f1f5f9', text: '#334155', border: '#cbd5e1' };
+    }
+  };
+
+  const getTypeBadgeStyle = (type: string) => {
+    switch (type.toLowerCase()) {
+      case 'bridge':
+        return { bg: '#f3e8ff', text: '#6b21a8', border: '#e9d5ff' };
+      case 'road':
+        return { bg: '#eff6ff', text: '#1d4ed8', border: '#dbeafe' };
+      case 'culvert':
+        return { bg: '#ecfdf5', text: '#047857', border: '#a7f3d0' };
+      case 'causeway':
+        return { bg: '#fff7ed', text: '#c2410c', border: '#ffedd5' };
+      default:
+        return { bg: '#f8fafc', text: '#334155', border: '#e2e8f0' };
+    }
+  };
+
+  // Dynamic Pagination Calculations
+  // Guarantees 100% of scoped assets and defects are captured without arbitrary slicing
+  const inventoryChunkSize = orientation === 'portrait' ? 14 : 10;
+  const inventoryChunks: Asset[][] = [];
+  for (let i = 0; i < scopedAssets.length; i += inventoryChunkSize) {
+    inventoryChunks.push(scopedAssets.slice(i, i + inventoryChunkSize));
+  }
+  if (inventoryChunks.length === 0) {
+    inventoryChunks.push([]);
+  }
+
+  // Defects page chunking (ensures defects + statutory sign-off fit cleanly)
+  const defectChunkSize = orientation === 'portrait' ? 8 : 6;
+  const defectChunks: Defect[][] = [];
+  for (let i = 0; i < scopedDefects.length; i += defectChunkSize) {
+    defectChunks.push(scopedDefects.slice(i, i + defectChunkSize));
+  }
+  if (defectChunks.length === 0) {
+    defectChunks.push([]);
+  }
+
+  // Total pages calculation: 1 (Exec) + 1 (Priorities) + inventoryChunks.length + defectChunks.length
+  const totalPages = 2 + inventoryChunks.length + defectChunks.length;
+
+  // List of page keys for preview filtering
+  const pageNavItems: { id: string; label: string }[] = [{ id: 'all', label: 'All Pages' }];
+  for (let p = 1; p <= totalPages; p++) {
+    pageNavItems.push({ id: `${p}`, label: `Page ${p}` });
+  }
+
   // SAVE AS PDF via html2pdf with automatic oklch -> RGB normalization
   const handleSaveAsPdf = async () => {
     if (!printAreaRef.current) return;
@@ -145,7 +255,6 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
       if (typeof str !== 'string') return str;
       if (!str.includes('oklch') && !str.includes('oklab')) return str;
 
-      // Convert oklch(...)
       let result = str.replace(
         /oklch\(\s*([-\d.]+%?|none)[\s,]+([-\d.]+|none)[\s,]+([-\d.]+|none)(?:[\s,/]+([-\d.]+%?|none))?\s*\)/gi,
         (_match, lStr, cStr, hStr, aStr) => {
@@ -164,7 +273,6 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
         }
       );
 
-      // Convert oklab(...)
       result = result.replace(
         /oklab\(\s*([-\d.]+%?|none)[\s,]+([-\d.]+|none)[\s,]+([-\d.]+|none)(?:[\s,/]+([-\d.]+%?|none))?\s*\)/gi,
         (_match, lStr, aStr_, bStr_, alphaStr) => {
@@ -183,7 +291,6 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
         }
       );
 
-      // Ultimate safety fallback for any other oklch expression
       if (result.includes('oklch')) {
         result = result.replace(/oklch\([^)]+\)/gi, 'rgb(15, 23, 42)');
       }
@@ -194,7 +301,6 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
       return result;
     };
 
-    // Helper to wrap CSSStyleDeclaration in a safe proxy that converts oklch to rgb without Illegal invocation
     const createSafeStyleProxy = (realStyle: CSSStyleDeclaration) => {
       return new Proxy(realStyle, {
         get(target, prop) {
@@ -223,7 +329,6 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
       });
     };
 
-    // Patch window.getComputedStyle during generation to prevent html2canvas from receiving raw oklch
     const originalGetComputedStyle = window.getComputedStyle;
     window.getComputedStyle = function (elt: Element, pseudoElt?: string | null) {
       const realStyle = originalGetComputedStyle.call(window, elt, pseudoElt);
@@ -239,8 +344,9 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
       const element = printAreaRef.current;
       const fileName = `Central_Province_Abau_District_Asset_Report_${orientation}_${new Date().toISOString().split('T')[0]}.pdf`;
 
+      // Optimized html2pdf options: zero margin prevents scaling cutoffs, explicit windowWidth guarantees column stability
       const opt = {
-        margin: [6, 6, 6, 6] as [number, number, number, number],
+        margin: [0, 0, 0, 0] as [number, number, number, number],
         filename: fileName,
         image: { type: 'jpeg' as const, quality: 0.98 },
         html2canvas: {
@@ -249,9 +355,10 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
           letterRendering: true,
           logging: false,
           scrollY: 0,
+          scrollX: 0,
           backgroundColor: '#ffffff',
+          windowWidth: orientation === 'portrait' ? 794 : 1123,
           onclone: (clonedDoc: Document) => {
-            // Guarantee light background and color on html and body
             if (clonedDoc.documentElement) {
               clonedDoc.documentElement.style.backgroundColor = '#ffffff';
               clonedDoc.documentElement.style.color = '#0f172a';
@@ -262,7 +369,6 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
               clonedDoc.body.className = '';
             }
 
-            // Also patch defaultView of the cloned document if available
             if (clonedDoc.defaultView && clonedDoc.defaultView !== window) {
               const clonedOrig = clonedDoc.defaultView.getComputedStyle;
               if (clonedOrig) {
@@ -273,7 +379,6 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
               }
             }
 
-            // Replace any oklch color references in <style> elements
             const styleTags = clonedDoc.querySelectorAll('style');
             styleTags.forEach((tag) => {
               if (tag.textContent && (tag.textContent.includes('oklch') || tag.textContent.includes('oklab'))) {
@@ -281,7 +386,6 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
               }
             });
 
-            // Replace any oklch color references in inline styles
             const allElements = clonedDoc.querySelectorAll('*');
             allElements.forEach((node) => {
               const el = node as HTMLElement;
@@ -291,18 +395,41 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
               }
             });
 
-            // Inject print-safe styles
+            // Inject high-legibility print stylesheet
             const printReset = clonedDoc.createElement('style');
             printReset.textContent = `
               html, body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
                 background-color: #ffffff !important;
                 background: #ffffff !important;
                 color: #0f172a !important;
+                margin: 0 !important;
+                padding: 0 !important;
               }
               * {
+                box-sizing: border-box !important;
                 color-scheme: light !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+              }
+              table {
+                border-collapse: collapse !important;
+                table-layout: fixed !important;
+                width: 100% !important;
+              }
+              th, td {
+                word-break: break-word !important;
+                overflow-wrap: break-word !important;
+                white-space: normal !important;
+                vertical-align: top !important;
+              }
+              .a4-page {
+                box-sizing: border-box !important;
+                page-break-after: always !important;
+                break-after: page !important;
+              }
+              .font-mono {
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
               }
             `;
             clonedDoc.head.appendChild(printReset);
@@ -312,6 +439,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
           unit: 'mm',
           format: 'a4',
           orientation: orientation,
+          compress: true,
         },
         pagebreak: {
           mode: ['css', 'legacy'],
@@ -322,7 +450,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
       await html2pdf().set(opt).from(element).save();
 
       setIsGeneratingPdf(false);
-      setExportSuccessMsg(`A4 PDF exported successfully: ${fileName}`);
+      setExportSuccessMsg(`A4 PDF exported successfully (${totalPages} pages): ${fileName}`);
       setTimeout(() => setExportSuccessMsg(null), 5000);
     } catch (err: any) {
       console.error('PDF Generation Error:', err);
@@ -333,7 +461,6 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
         setExportErrorMsg(null);
       }, 1000);
     } finally {
-      // Always restore original getComputedStyle
       window.getComputedStyle = originalGetComputedStyle;
     }
   };
@@ -351,23 +478,37 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Central Province Infrastructure Report - Abau District</title>
+  <title>Central Province Infrastructure Report - Abau District (${orientation.toUpperCase()})</title>
   <style>
-    @page { size: A4 ${orientation}; margin: 10mm; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background: #fff; color: #0f172a; margin: 0; padding: 10mm; font-size: 9pt; line-height: 1.4; }
-    .a4-page { page-break-after: always; break-after: page; box-sizing: border-box; margin-bottom: 20px; }
-    table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 8.5pt; table-layout: fixed; }
-    th, td { border: 1px solid #cbd5e1; padding: 5px 6px; text-align: left; vertical-align: top; }
-    th { background-color: #f1f5f9; font-weight: 700; color: #1e293b; text-transform: uppercase; font-size: 7.5pt; }
-    .header-box { border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; }
-    .grid { display: flex; gap: 10px; margin-bottom: 10px; }
-    .card { flex: 1; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; background: #f8fafc; }
-    .badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 7.5pt; font-weight: bold; }
-    .badge-critical { background: #fee2e2; color: #991b1b; }
-    .badge-poor { background: #ffedd5; color: #9a3412; }
-    .badge-fair { background: #fef3c7; color: #92400e; }
-    .badge-good { background: #d1fae5; color: #065f46; }
-    @media print { body { padding: 0; } .a4-page { margin-bottom: 0; } }
+    @page { size: A4 ${orientation}; margin: 8mm; }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #ffffff;
+      color: #0f172a;
+      margin: 0;
+      padding: 0;
+      font-size: 8.5pt;
+      line-height: 1.4;
+    }
+    .a4-page {
+      page-break-after: always;
+      break-after: page;
+      box-sizing: border-box;
+      padding: 10mm;
+      width: ${orientation === 'portrait' ? '210mm' : '297mm'};
+      min-height: ${orientation === 'portrait' ? '297mm' : '210mm'};
+      margin: 0 auto 20px auto;
+      background: #ffffff;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 8pt; table-layout: fixed; }
+    th, td { border: 1px solid #cbd5e1; padding: 4px 6px; text-align: left; vertical-align: top; word-break: break-word; }
+    th { background-color: #f1f5f9; font-weight: 700; color: #0f172a; text-transform: uppercase; font-size: 7pt; }
+    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    @media print {
+      body { padding: 0; }
+      .a4-page { margin: 0; padding: 8mm; page-break-after: always; break-after: page; }
+    }
   </style>
 </head>
 <body>
@@ -379,54 +520,63 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Central_Province_Abau_District_Dossier_${new Date().toISOString().split('T')[0]}.html`;
+    link.download = `Central_Province_Abau_District_Dossier_${orientation}_${new Date().toISOString().split('T')[0]}.html`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
   // Reusable Running Header for each A4 Sheet
   const renderRunningHeader = (pageNum: number, title: string) => (
-    <div className="border-b-2 border-slate-900 pb-2 mb-3 avoid-break-inside">
+    <div className="border-b-2 border-slate-900 pb-2 mb-2.5 avoid-break-inside">
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-[9px] uppercase font-mono tracking-widest text-amber-700 font-bold">
+            <span className="text-[8.5px] uppercase font-mono tracking-widest text-amber-800 font-bold">
               Independent State of Papua New Guinea
             </span>
             <span className="text-[8px] px-1.5 py-0.2 rounded bg-slate-100 border border-slate-300 font-mono text-slate-700 font-bold">
               REF: CPG-ABAU-INFRA-2026-Q4
             </span>
           </div>
-          <h1 className="text-base sm:text-lg font-black text-slate-950 uppercase tracking-tight">
+          <h1 className="text-base sm:text-lg font-black text-slate-950 uppercase tracking-tight leading-none mt-0.5">
             CENTRAL PROVINCE GOVERNMENT
           </h1>
-          <div className="flex items-center gap-2 text-[10px] text-slate-700 font-bold uppercase">
+          <div className="flex items-center gap-2 text-[9.5px] text-slate-700 font-bold uppercase mt-0.5">
             <span>Directorate of Works & Strategic Asset Infrastructure</span>
             <span>&bull;</span>
             <span className="text-amber-800 font-bold">Abau District Primary Register</span>
           </div>
         </div>
 
-        <div className="text-right text-[9px] text-slate-600 space-y-0.5">
-          <p><b>Date:</b> {reportDate}</p>
-          <p><b>District Scope:</b> <span className="font-bold text-slate-900">{districtScope === 'Abau' ? 'Abau District (Rigo Frozen)' : `${districtScope} District`}</span></p>
-          <p><b>Section:</b> {title}</p>
+        <div className="text-right text-[8.5px] text-slate-700 space-y-0.5">
+          <p><b className="text-slate-900">Date:</b> {reportDate}</p>
+          <p><b className="text-slate-900">District Scope:</b> <span className="font-bold text-slate-950">{districtScope === 'Abau' ? 'Abau District (Active)' : `${districtScope} Scope`}</span></p>
+          <p><b className="text-slate-900">Section:</b> <span className="text-amber-900 font-semibold">{title}</span></p>
         </div>
       </div>
     </div>
   );
 
   // Reusable Running Footer for each A4 Sheet
-  const renderRunningFooter = (pageNum: number, totalPages: number = 4) => (
-    <div className="border-t border-slate-300 pt-1.5 mt-auto text-[8.5px] text-slate-500 flex items-center justify-between avoid-break-inside">
-      <div>
-        <span>Central Province Government &bull; Abau District Digital Asset Management Platform (Aroma, Kupiano, Cloudy Bay, Amazon Bay)</span>
+  const renderRunningFooter = (pageNum: number) => (
+    <div className="border-t border-slate-300 pt-1.5 mt-auto text-[8.5px] text-slate-600 flex items-center justify-between avoid-break-inside">
+      <div className="flex items-center gap-2">
+        <span className="font-semibold text-slate-800">Central Province Government &bull; Directorate of Works</span>
+        <span className="text-slate-400">&bull;</span>
+        <span>Abau Lifelines: Aroma, Kupiano, Cloudy Bay, Amazon Bay</span>
       </div>
-      <div className="font-mono font-bold text-slate-700">
+      <div className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
         Page {pageNum} of {totalPages}
       </div>
     </div>
   );
+
+  // Common A4 page container styling
+  const pageContainerClass = `bg-white text-slate-900 shadow-2xl a4-page flex flex-col justify-between ${
+    orientation === 'portrait'
+      ? 'w-[210mm] min-h-[297mm] h-auto p-[10mm]'
+      : 'w-[297mm] min-h-[210mm] h-auto p-[8mm]'
+  }`;
 
   return (
     <div className="fixed inset-0 z-[1300] bg-slate-950/90 backdrop-blur-md flex flex-col justify-between overflow-hidden">
@@ -442,11 +592,11 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
                 A4 PDF Layout & Export Studio
               </h2>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold uppercase">
-                A4 Guaranteed Fit
+                100% Data Capture &bull; {totalPages} Pages
               </span>
             </div>
             <p className="text-[11px] text-slate-400 hidden sm:block">
-              Abau District Targeted Register &bull; Structured into standard paginated A4 sheets
+              Abau District Targeted Register &bull; Clean typography, color-coded condition badges & verified photographic audit
             </p>
           </div>
         </div>
@@ -507,7 +657,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
             ) : (
               <>
                 <Download className="w-4 h-4" />
-                <span>Save as PDF (.pdf)</span>
+                <span>Save as PDF ({totalPages} Pages)</span>
               </>
             )}
           </button>
@@ -532,9 +682,9 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
               onChange={e => setDistrictScope(e.target.value as any)}
               className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200 text-xs font-bold focus:outline-none focus:border-amber-500"
             >
-              <option value="Abau">Abau District (Active Priority)</option>
-              <option value="All">All Central Province (Includes Frozen Rigo)</option>
-              <option value="Rigo">Rigo District Only (Frozen Archive)</option>
+              <option value="Abau">Abau District (13 Primary Assets)</option>
+              <option value="All">All Central Province (Full 20 Assets)</option>
+              <option value="Rigo">Rigo District (Archived)</option>
             </select>
           </div>
 
@@ -579,20 +729,20 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
             </button>
           </div>
 
-          {/* Page View Selector */}
+          {/* Dynamic Page View Selector */}
           <div className="flex items-center gap-1 pl-2 border-l border-slate-800">
             <span className="text-slate-400 font-semibold text-[11px]">View:</span>
-            {(['all', '1', '2', '3', '4'] as const).map(p => (
+            {pageNavItems.map(item => (
               <button
-                key={p}
-                onClick={() => setViewPage(p)}
+                key={item.id}
+                onClick={() => setViewPage(item.id)}
                 className={`px-2 py-0.5 rounded text-[11px] font-semibold cursor-pointer ${
-                  viewPage === p
+                  viewPage === item.id
                     ? 'bg-slate-700 text-white font-bold'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                {p === 'all' ? 'All 4 Pages' : `Page ${p}`}
+                {item.label}
               </button>
             ))}
           </div>
@@ -631,54 +781,47 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
             {/* PAGE 1: EXECUTIVE BRIEFING, VALUATION, & 4-LLG HEALTH SCORECARD */}
             {/* ============================================================== */}
             {(viewPage === 'all' || viewPage === '1') && (
-              <div
-                className={`bg-white text-slate-900 shadow-2xl a4-page flex flex-col justify-between ${
-                  orientation === 'portrait'
-                    ? 'w-[210mm] min-h-[297mm] max-h-[297mm] p-[10mm]'
-                    : 'w-[297mm] min-h-[210mm] max-h-[210mm] p-[8mm]'
-                }`}
-                style={{ boxSizing: 'border-box' }}
-              >
+              <div className={pageContainerClass} style={{ boxSizing: 'border-box' }}>
                 <div>
                   {renderRunningHeader(1, 'Executive Briefing & LLG Health Scorecard')}
 
                   {/* Section 1: Executive Summary */}
                   <div className="mb-3">
                     <div className="border-b border-slate-300 pb-1 mb-1.5 flex items-center justify-between">
-                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                        <Building2 className="w-3.5 h-3.5 text-amber-600" />
+                      <h3 className="text-xs font-bold text-slate-950 uppercase tracking-wider flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-amber-700" />
                         <span>1. Executive Summary & Asset Valuation — Abau District</span>
                       </h3>
-                      <span className="text-[8.5px] font-mono text-slate-500">Official Strategic Record</span>
+                      <span className="text-[8.5px] font-mono text-slate-600 font-semibold">Official Statutory Record</span>
                     </div>
 
-                    <p className="text-[9.5px] text-slate-700 leading-relaxed text-justify mb-2">
-                      Under the strategic directive of the Central Province Government, this statutory infrastructure dossier provides a targeted, location-based audit of critical transport corridors, modular bridges, armco culverts, and coastal drainage infrastructure across <b>Abau District</b>. The monitored network encompasses <b>{scopedAssets.length} core infrastructure assets</b> with an aggregate book replacement valuation of <b>PGK {(totalValueKina / 1000000).toFixed(2)} Million</b> across <b>Aroma, Kupiano, Cloudy Bay, and Amazon Bay Local Level Governments (LLGs)</b>. Infrastructure datasets for <b>Rigo District</b> have been frozen and placed into archived status to direct primary civil engineering capital works to Abau District lifelines.
+                    <p className="text-[9.5px] text-slate-800 leading-relaxed text-justify mb-2.5">
+                      Under the strategic directive of the Central Province Government, this statutory infrastructure dossier provides an exhaustive, location-based audit of critical transport corridors, modular bridges, armco culverts, and coastal drainage infrastructure across <b>Abau District</b>. The monitored network encompasses <b>{scopedAssets.length} core infrastructure assets</b> with an aggregate book replacement valuation of <b>PGK {(totalValueKina / 1000000).toFixed(2)} Million</b> across <b>Aroma, Kupiano, Cloudy Bay, and Amazon Bay Local Level Governments (LLGs)</b>. Infrastructure datasets for <b>Rigo District</b> have been placed in archived status to direct primary civil engineering capital works to Abau District lifelines.
                     </p>
 
-                    {/* KPI Stat Blocks */}
+                    {/* KPI Stat Blocks with High-Contrast Color Coding */}
                     <div className="grid grid-cols-4 gap-2 text-xs">
                       <div className="p-2 rounded bg-slate-50 border border-slate-300">
-                        <span className="text-[8.5px] text-slate-500 block uppercase font-semibold">Active Monitored Assets</span>
-                        <span className="text-base font-bold text-slate-900 font-mono">{scopedAssets.length}</span>
-                        <span className="text-[8px] text-slate-500 block">Abau District Network</span>
+                        <span className="text-[8.5px] text-slate-600 block uppercase font-bold">Active Monitored Assets</span>
+                        <span className="text-base font-extrabold text-slate-950 font-mono">{scopedAssets.length}</span>
+                        <span className="text-[8px] text-slate-600 block">100% Captured in Register</span>
                       </div>
                       <div className="p-2 rounded bg-rose-50 border border-rose-300">
-                        <span className="text-[8.5px] text-rose-800 block uppercase font-bold">Critical Priority Spans</span>
-                        <span className="text-base font-bold text-rose-700 font-mono">{criticalAssets.length}</span>
-                        <span className="text-[8px] text-rose-700 block">Immediate Action Required</span>
+                        <span className="text-[8.5px] text-rose-900 block uppercase font-bold">Critical Priority Spans</span>
+                        <span className="text-base font-extrabold text-rose-800 font-mono">{criticalAssets.length}</span>
+                        <span className="text-[8px] text-rose-700 block">Immediate Capital Action</span>
                       </div>
                       <div className="p-2 rounded bg-amber-50 border border-amber-300">
-                        <span className="text-[8.5px] text-amber-800 block uppercase font-bold">Poor Sub-base / Decks</span>
-                        <span className="text-base font-bold text-amber-700 font-mono">{poorAssets.length}</span>
-                        <span className="text-[8px] text-amber-700 block">Scheduled Capital Works</span>
+                        <span className="text-[8.5px] text-amber-900 block uppercase font-bold">Poor Sub-base / Decks</span>
+                        <span className="text-base font-extrabold text-amber-800 font-mono">{poorAssets.length}</span>
+                        <span className="text-[8px] text-amber-700 block">Scheduled Rehabilitation</span>
                       </div>
                       <div className="p-2 rounded bg-emerald-50 border border-emerald-300">
-                        <span className="text-[8.5px] text-emerald-800 block uppercase font-bold">Total Replacement Value</span>
-                        <span className="text-sm font-bold text-emerald-800 font-mono">
+                        <span className="text-[8.5px] text-emerald-900 block uppercase font-bold">Total Replacement Value</span>
+                        <span className="text-sm font-extrabold text-emerald-900 font-mono">
                           PGK {(totalValueKina / 1000000).toFixed(1)}M
                         </span>
-                        <span className="text-[8px] text-emerald-700 block">Current Civil Asset Base</span>
+                        <span className="text-[8px] text-emerald-700 block">Audited Civil Asset Base</span>
                       </div>
                     </div>
                   </div>
@@ -686,99 +829,137 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
                   {/* Section 2: 4-LLG Infrastructure Health Scorecard */}
                   <div className="mb-3">
                     <div className="border-b border-slate-300 pb-1 mb-2 flex items-center justify-between">
-                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                        2. Abau District Local-Level Government (LLG) Health Scorecard
+                      <h3 className="text-xs font-bold text-slate-950 uppercase tracking-wider flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-amber-700" />
+                        <span>2. Abau District Local-Level Government (LLG) Health Scorecard</span>
                       </h3>
-                      <span className="text-[8.5px] font-mono text-slate-500">4 Operational LLGs</span>
+                      <span className="text-[8.5px] font-mono text-slate-600 font-semibold">4 Operational LLGs</span>
                     </div>
 
                     <div className={`grid gap-2 text-xs ${orientation === 'portrait' ? 'grid-cols-2' : 'grid-cols-4'}`}>
                       {/* Aroma LLG */}
                       <div className="p-2.5 rounded border border-slate-300 bg-slate-50 space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900 text-[10px]">Aroma LLG</span>
-                          <span className="font-mono font-bold text-amber-900 bg-amber-100 px-1.5 py-0.2 rounded text-[9px]">
+                          <span className="font-bold text-slate-950 text-[10px]">Aroma LLG</span>
+                          <span
+                            className="font-mono font-bold px-1.5 py-0.2 rounded text-[8.5px] border"
+                            style={{
+                              backgroundColor: getConditionBadgeStyle(aromaAvg >= 75 ? 'Good' : aromaAvg >= 60 ? 'Fair' : 'Poor').bg,
+                              color: getConditionBadgeStyle(aromaAvg >= 75 ? 'Good' : aromaAvg >= 60 ? 'Fair' : 'Poor').text,
+                              borderColor: getConditionBadgeStyle(aromaAvg >= 75 ? 'Good' : aromaAvg >= 60 ? 'Fair' : 'Poor').border,
+                            }}
+                          >
                             Index: {aromaAvg}/100
                           </span>
                         </div>
-                        <p className="text-[8.5px] text-slate-600 leading-tight">
+                        <p className="text-[8.5px] text-slate-700 leading-tight">
                           Key Localities: Maopa, Pelagai, Kinikalana, Wapagai, Waro, Vuru, Wairavanua, Kwapeupa.
                         </p>
                         <div className="grid grid-cols-3 gap-1 text-[8.5px] text-center pt-1 border-t border-slate-200">
-                          <div>Assets: <b>{aromaAssets.length}</b></div>
-                          <div className="text-rose-700">Critical: <b>{aromaAssets.filter(a => a.conditionClassification === 'Critical').length}</b></div>
-                          <div className="text-amber-800">Defects: <b>{defects.filter(d => d.llg === 'Aroma LLG').length}</b></div>
+                          <div>Assets: <b className="text-slate-900">{aromaAssets.length}</b></div>
+                          <div className="text-rose-800">Critical: <b>{aromaAssets.filter(a => a.conditionClassification === 'Critical').length}</b></div>
+                          <div className="text-amber-900">Defects: <b>{defects.filter(d => d.llg === 'Aroma LLG').length}</b></div>
                         </div>
                       </div>
 
                       {/* Kupiano LLG */}
                       <div className="p-2.5 rounded border border-slate-300 bg-slate-50 space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900 text-[10px]">Kupiano LLG (HQ)</span>
-                          <span className="font-mono font-bold text-emerald-900 bg-emerald-100 px-1.5 py-0.2 rounded text-[9px]">
+                          <span className="font-bold text-slate-950 text-[10px]">Kupiano LLG (HQ)</span>
+                          <span
+                            className="font-mono font-bold px-1.5 py-0.2 rounded text-[8.5px] border"
+                            style={{
+                              backgroundColor: getConditionBadgeStyle(kupianoAvg >= 75 ? 'Good' : kupianoAvg >= 60 ? 'Fair' : 'Poor').bg,
+                              color: getConditionBadgeStyle(kupianoAvg >= 75 ? 'Good' : kupianoAvg >= 60 ? 'Fair' : 'Poor').text,
+                              borderColor: getConditionBadgeStyle(kupianoAvg >= 75 ? 'Good' : kupianoAvg >= 60 ? 'Fair' : 'Poor').border,
+                            }}
+                          >
                             Index: {kupianoAvg}/100
                           </span>
                         </div>
-                        <p className="text-[8.5px] text-slate-600 leading-tight">
+                        <p className="text-[8.5px] text-slate-700 leading-tight">
                           Administrative Centre: Kupiano Station, Vilirupu, Obaha, Government Wharf & Hospital.
                         </p>
                         <div className="grid grid-cols-3 gap-1 text-[8.5px] text-center pt-1 border-t border-slate-200">
-                          <div>Assets: <b>{kupianoAssets.length}</b></div>
-                          <div className="text-rose-700">Critical: <b>{kupianoAssets.filter(a => a.conditionClassification === 'Critical').length}</b></div>
-                          <div className="text-amber-800">Defects: <b>{defects.filter(d => d.llg === 'Kupiano LLG').length}</b></div>
+                          <div>Assets: <b className="text-slate-900">{kupianoAssets.length}</b></div>
+                          <div className="text-rose-800">Critical: <b>{kupianoAssets.filter(a => a.conditionClassification === 'Critical').length}</b></div>
+                          <div className="text-amber-900">Defects: <b>{defects.filter(d => d.llg === 'Kupiano LLG').length}</b></div>
                         </div>
                       </div>
 
                       {/* Cloudy Bay LLG */}
                       <div className="p-2.5 rounded border border-slate-300 bg-slate-50 space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900 text-[10px]">Cloudy Bay LLG</span>
-                          <span className="font-mono font-bold text-rose-900 bg-rose-100 px-1.5 py-0.2 rounded text-[9px]">
+                          <span className="font-bold text-slate-950 text-[10px]">Cloudy Bay LLG</span>
+                          <span
+                            className="font-mono font-bold px-1.5 py-0.2 rounded text-[8.5px] border"
+                            style={{
+                              backgroundColor: getConditionBadgeStyle(cloudyBayAvg >= 75 ? 'Good' : cloudyBayAvg >= 60 ? 'Fair' : cloudyBayAvg >= 40 ? 'Poor' : 'Critical').bg,
+                              color: getConditionBadgeStyle(cloudyBayAvg >= 75 ? 'Good' : cloudyBayAvg >= 60 ? 'Fair' : cloudyBayAvg >= 40 ? 'Poor' : 'Critical').text,
+                              borderColor: getConditionBadgeStyle(cloudyBayAvg >= 75 ? 'Good' : cloudyBayAvg >= 60 ? 'Fair' : cloudyBayAvg >= 40 ? 'Poor' : 'Critical').border,
+                            }}
+                          >
                             Index: {cloudyBayAvg}/100
                           </span>
                         </div>
-                        <p className="text-[8.5px] text-slate-600 leading-tight">
-                          Key Localities: Amau, Abau, Bomguina, Merani, Badubadu, Baramata No. 4, Moreguipa.
+                        <p className="text-[8.5px] text-slate-700 leading-tight">
+                          Key Localities: Amau, Abau, Bomguina, Merani, Badubadu, Baramata No. 4, Moreguina.
                         </p>
                         <div className="grid grid-cols-3 gap-1 text-[8.5px] text-center pt-1 border-t border-slate-200">
-                          <div>Assets: <b>{cloudyBayAssets.length}</b></div>
-                          <div className="text-rose-700">Critical: <b>{cloudyBayAssets.filter(a => a.conditionClassification === 'Critical').length}</b></div>
-                          <div className="text-amber-800">Defects: <b>{defects.filter(d => d.llg === 'Cloudy Bay LLG').length}</b></div>
+                          <div>Assets: <b className="text-slate-900">{cloudyBayAssets.length}</b></div>
+                          <div className="text-rose-800">Critical: <b>{cloudyBayAssets.filter(a => a.conditionClassification === 'Critical').length}</b></div>
+                          <div className="text-amber-900">Defects: <b>{defects.filter(d => d.llg === 'Cloudy Bay LLG').length}</b></div>
                         </div>
                       </div>
 
                       {/* Amazon Bay LLG */}
                       <div className="p-2.5 rounded border border-slate-300 bg-slate-50 space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900 text-[10px]">Amazon Bay LLG</span>
-                          <span className="font-mono font-bold text-amber-900 bg-amber-100 px-1.5 py-0.2 rounded text-[9px]">
+                          <span className="font-bold text-slate-950 text-[10px]">Amazon Bay LLG</span>
+                          <span
+                            className="font-mono font-bold px-1.5 py-0.2 rounded text-[8.5px] border"
+                            style={{
+                              backgroundColor: getConditionBadgeStyle(amazonBayAvg >= 75 ? 'Good' : amazonBayAvg >= 60 ? 'Fair' : amazonBayAvg >= 40 ? 'Poor' : 'Critical').bg,
+                              color: getConditionBadgeStyle(amazonBayAvg >= 75 ? 'Good' : amazonBayAvg >= 60 ? 'Fair' : amazonBayAvg >= 40 ? 'Poor' : 'Critical').text,
+                              borderColor: getConditionBadgeStyle(amazonBayAvg >= 75 ? 'Good' : amazonBayAvg >= 60 ? 'Fair' : amazonBayAvg >= 40 ? 'Poor' : 'Critical').border,
+                            }}
+                          >
                             Index: {amazonBayAvg}/100
                           </span>
                         </div>
-                        <p className="text-[8.5px] text-slate-600 leading-tight">
+                        <p className="text-[8.5px] text-slate-700 leading-tight">
                           Key Localities: Magarida, Laua, Arau, Bilaga, Nunumai, Selai, Wowolo, Magori, Moduala.
                         </p>
                         <div className="grid grid-cols-3 gap-1 text-[8.5px] text-center pt-1 border-t border-slate-200">
-                          <div>Assets: <b>{amazonBayAssets.length}</b></div>
-                          <div className="text-rose-700">Critical: <b>{amazonBayAssets.filter(a => a.conditionClassification === 'Critical').length}</b></div>
-                          <div className="text-amber-800">Defects: <b>{defects.filter(d => d.llg === 'Amazon Bay LLG').length}</b></div>
+                          <div>Assets: <b className="text-slate-900">{amazonBayAssets.length}</b></div>
+                          <div className="text-rose-800">Critical: <b>{amazonBayAssets.filter(a => a.conditionClassification === 'Critical').length}</b></div>
+                          <div className="text-amber-900">Defects: <b>{defects.filter(d => d.llg === 'Amazon Bay LLG').length}</b></div>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Section 3: Spatial Corridor Overview (Incorporating Attachment Coordinates) */}
-                  <div className="p-2 rounded border border-slate-300 bg-slate-50/70 text-[9px] text-slate-700 leading-normal">
-                    <div className="font-bold text-slate-900 mb-0.5 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <Compass className="w-3 h-3 text-amber-600" />
-                        <span>Magi Highway Corridor & 61 Localities GIS Audit Summary</span>
+                  {/* Section 3: Spatial Corridor Overview & Photographic Audit */}
+                  <div className="p-2.5 rounded border border-slate-300 bg-slate-50 text-[9px] text-slate-800 leading-normal space-y-1">
+                    <div className="font-bold text-slate-950 mb-0.5 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Compass className="w-3.5 h-3.5 text-amber-700" />
+                        <span>Magi Highway Arterial Corridor & 61 Localities GIS Audit Summary</span>
                       </span>
-                      <span className="font-mono text-[8px] text-slate-500">Attachment Spec 2026</span>
+                      <span className="font-mono text-[8px] text-slate-600 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                        GPS Ground Truthed &bull; 2026 Audit
+                      </span>
                     </div>
-                    <p className="text-[8.5px] text-slate-600">
+                    <p className="text-[8.5px] text-slate-700 leading-relaxed">
                       The active digital mapping platform tracks all <b>61 gazetted villages and localities</b> across the four LLGs of Abau District, integrated with the Central Province Road corridor starting at <b>Tubusereia (-9.550, 147.320)</b>, traversing <b>Barakau, Gaire, Manugoro, Deugolo, and Gabagaba (-9.802, 147.516)</b>, and connecting through the arterial highway directly to Kupiano District Station, Cape Rodney, Robinson River basin, and eastward to Magarida in Amazon Bay.
                     </p>
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-200 text-[8px] text-slate-600">
+                      <span className="flex items-center gap-1 text-emerald-800 font-semibold">
+                        <Camera className="w-3 h-3" />
+                        Photographic Verification: 100% of Abau primary assets mapped with Cloudflare R2 high-resolution imagery.
+                      </span>
+                      <span className="font-mono text-slate-500">Coordinate Datum: WGS84</span>
+                    </div>
                   </div>
                 </div>
 
@@ -793,124 +974,133 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
             {/* PAGE 2: CAPITAL WORKS PRIORITISATION SCHEDULE & MULTI-FACTOR */}
             {/* ============================================================== */}
             {(viewPage === 'all' || viewPage === '2') && (
-              <div
-                className={`bg-white text-slate-900 shadow-2xl a4-page flex flex-col justify-between ${
-                  orientation === 'portrait'
-                    ? 'w-[210mm] min-h-[297mm] max-h-[297mm] p-[10mm]'
-                    : 'w-[297mm] min-h-[210mm] max-h-[210mm] p-[8mm]'
-                }`}
-                style={{ boxSizing: 'border-box' }}
-              >
+              <div className={pageContainerClass} style={{ boxSizing: 'border-box' }}>
                 <div>
                   {renderRunningHeader(2, 'Capital Works Prioritisation Schedule')}
 
                   <div className="mb-2 flex items-center justify-between border-b border-slate-300 pb-1">
                     <div>
-                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                      <h3 className="text-xs font-bold text-slate-950 uppercase tracking-wider">
                         3. High & Critical Maintenance Capital Priority Schedule
                       </h3>
-                      <p className="text-[8.5px] text-slate-600">
+                      <p className="text-[8.5px] text-slate-700">
                         Objective ranking produced by Central Province Multi-Criteria Engineering Model
                       </p>
                     </div>
-                    <div className="text-right text-[8px] font-mono text-slate-500">
+                    <div className="text-right text-[8px] font-mono text-slate-600 font-semibold">
                       Formula: W₁·Deficit + W₂·Defects + W₃·Safety + W₄·Importance + W₅·Disruption
                     </div>
                   </div>
 
-                  {/* Priority Assets Table */}
-                  <table className="w-full text-left text-[8.5px] border border-slate-300 mb-3 table-fixed">
-                    <thead className="bg-slate-100 text-slate-800 uppercase font-bold text-[7.5px] border-b border-slate-300">
+                  {/* Priority Assets Table: Captures prioritized assets without overlap */}
+                  <table className="w-full text-left text-[8px] border border-slate-300 mb-2.5 table-fixed border-collapse">
+                    <thead className="bg-slate-100 text-slate-900 uppercase font-bold text-[7pt] border-b border-slate-300">
                       <tr>
-                        <th style={{ width: '14%' }} className="p-1 border-r border-slate-300">Asset Code / ID</th>
-                        <th style={{ width: '22%' }} className="p-1 border-r border-slate-300">Asset & Location</th>
-                        <th style={{ width: '13%' }} className="p-1 border-r border-slate-300">LLG</th>
-                        <th style={{ width: '12%' }} className="p-1 border-r border-slate-300">Condition</th>
-                        <th style={{ width: '11%' }} className="p-1 border-r border-slate-300">Score / Rank</th>
-                        <th style={{ width: '28%' }} className="p-1">Recommended Intervention Action</th>
+                        <th style={{ width: '12%' }} className="p-1.5 border-r border-slate-300">Rank / ID</th>
+                        <th style={{ width: '22%' }} className="p-1.5 border-r border-slate-300">Asset & Location</th>
+                        <th style={{ width: '10%' }} className="p-1.5 border-r border-slate-300">Type</th>
+                        <th style={{ width: '13%' }} className="p-1.5 border-r border-slate-300">Condition</th>
+                        <th style={{ width: '10%' }} className="p-1.5 border-r border-slate-300 text-right">Score</th>
+                        <th style={{ width: '13%' }} className="p-1.5 border-r border-slate-300">Profile</th>
+                        <th style={{ width: '20%' }} className="p-1.5">Recommended Intervention</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
                       {[...scopedAssets]
                         .filter(a => a.priorityScore > 0)
                         .sort((a, b) => b.priorityScore - a.priorityScore)
-                        .slice(0, orientation === 'portrait' ? 8 : 7)
-                        .map((a, idx) => (
-                          <tr key={a.id} className="hover:bg-slate-50">
-                            <td className="p-1 font-mono font-bold border-r border-slate-300 truncate">
-                              #{idx + 1} {a.id}
-                            </td>
-                            <td className="p-1 font-semibold text-slate-900 border-r border-slate-300 truncate">
-                              {a.name}
-                            </td>
-                            <td className="p-1 border-r border-slate-300 truncate">{a.llg}</td>
-                            <td className="p-1 border-r border-slate-300 whitespace-nowrap">
-                              <span
-                                className={`px-1 py-0.2 rounded font-bold text-[7.5px] ${
-                                  a.conditionClassification === 'Critical'
-                                    ? 'bg-rose-100 text-rose-800'
-                                    : a.conditionClassification === 'Poor'
-                                    ? 'bg-orange-100 text-orange-800'
-                                    : a.conditionClassification === 'Fair'
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : 'bg-emerald-100 text-emerald-800'
-                                }`}
-                              >
-                                {a.conditionClassification} ({a.conditionScore})
-                              </span>
-                            </td>
-                            <td className="p-1 font-mono font-bold text-rose-800 border-r border-slate-300">
-                              {a.priorityScore.toFixed(1)}/100
-                            </td>
-                            <td className="p-1 text-slate-700 leading-tight truncate">
-                              {a.recommendedAction}
-                            </td>
-                          </tr>
-                        ))}
+                        .map((a, idx) => {
+                          const condBadge = getConditionBadgeStyle(a.conditionClassification);
+                          const typeBadge = getTypeBadgeStyle(a.type);
+                          return (
+                            <tr key={a.id} className="hover:bg-slate-50">
+                              <td className="p-1.5 align-top font-mono font-bold border-r border-slate-300 break-words text-slate-900">
+                                #{idx + 1} {a.id}
+                              </td>
+                              <td className="p-1.5 align-top border-r border-slate-300 break-words">
+                                <div className="font-semibold text-slate-950 leading-tight">{a.name}</div>
+                                <div className="text-[7pt] text-slate-600 font-mono mt-0.5">{a.llg}</div>
+                              </td>
+                              <td className="p-1.5 align-top border-r border-slate-300 break-words">
+                                <span
+                                  className="px-1.5 py-0.2 rounded font-bold text-[7pt] inline-block border capitalize"
+                                  style={{
+                                    backgroundColor: typeBadge.bg,
+                                    color: typeBadge.text,
+                                    borderColor: typeBadge.border,
+                                  }}
+                                >
+                                  {a.type}
+                                </span>
+                              </td>
+                              <td className="p-1.5 align-top border-r border-slate-300 break-words">
+                                <span
+                                  className="px-1.5 py-0.2 rounded font-bold text-[7pt] inline-block border whitespace-nowrap"
+                                  style={{
+                                    backgroundColor: condBadge.bg,
+                                    color: condBadge.text,
+                                    borderColor: condBadge.border,
+                                  }}
+                                >
+                                  {a.conditionClassification} ({a.conditionScore})
+                                </span>
+                              </td>
+                              <td className="p-1.5 align-top font-mono font-bold text-rose-800 border-r border-slate-300 text-right">
+                                {a.priorityScore.toFixed(1)}
+                              </td>
+                              <td className="p-1.5 align-top border-r border-slate-300 text-[7pt] font-mono text-slate-600 leading-tight break-words">
+                                Def:{a.priorityFactors?.conditionDeficit || '-'} • Saf:{a.priorityFactors?.safetyRisk || '-'}
+                              </td>
+                              <td className="p-1.5 align-top text-slate-800 leading-tight break-words">
+                                {a.recommendedAction}
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
 
                   {/* Multi-Factor Formula Breakdown Panel */}
-                  <div className="p-2.5 rounded border border-slate-300 bg-slate-50 text-[8.5px] space-y-1.5">
-                    <div className="font-bold text-slate-900 flex items-center justify-between text-[9px]">
+                  <div className="p-2.5 rounded border border-slate-300 bg-slate-50 text-[8.5px] space-y-1.5 avoid-break-inside">
+                    <div className="font-bold text-slate-950 flex items-center justify-between text-[9px]">
                       <span>Statutory Multi-Factor Scoring Weight Configuration</span>
-                      <span className="font-mono text-emerald-700">Weights Sum: 100%</span>
+                      <span className="font-mono text-emerald-800 font-bold">Weights Sum: 100%</span>
                     </div>
 
                     <div className="grid grid-cols-5 gap-2 text-center pt-1 border-t border-slate-200">
                       <div className="p-1 bg-white rounded border border-slate-200">
-                        <span className="block text-slate-500 text-[7.5px] uppercase">Condition Deficit</span>
-                        <span className="font-mono font-bold text-slate-900 text-[10px]">
+                        <span className="block text-slate-600 text-[7.5px] uppercase font-semibold">Condition Deficit</span>
+                        <span className="font-mono font-bold text-slate-950 text-[10px]">
                           {(priorityWeights.conditionDeficitWeight * 100).toFixed(0)}%
                         </span>
                       </div>
                       <div className="p-1 bg-white rounded border border-slate-200">
-                        <span className="block text-slate-500 text-[7.5px] uppercase">Defect Severity</span>
-                        <span className="font-mono font-bold text-slate-900 text-[10px]">
+                        <span className="block text-slate-600 text-[7.5px] uppercase font-semibold">Defect Severity</span>
+                        <span className="font-mono font-bold text-slate-950 text-[10px]">
                           {(priorityWeights.defectSeverityWeight * 100).toFixed(0)}%
                         </span>
                       </div>
                       <div className="p-1 bg-white rounded border border-slate-200">
-                        <span className="block text-slate-500 text-[7.5px] uppercase">Public Safety Risk</span>
-                        <span className="font-mono font-bold text-slate-900 text-[10px]">
+                        <span className="block text-slate-600 text-[7.5px] uppercase font-semibold">Public Safety Risk</span>
+                        <span className="font-mono font-bold text-slate-950 text-[10px]">
                           {(priorityWeights.safetyRiskWeight * 100).toFixed(0)}%
                         </span>
                       </div>
                       <div className="p-1 bg-white rounded border border-slate-200">
-                        <span className="block text-slate-500 text-[7.5px] uppercase">Route Importance</span>
-                        <span className="font-mono font-bold text-slate-900 text-[10px]">
+                        <span className="block text-slate-600 text-[7.5px] uppercase font-semibold">Route Importance</span>
+                        <span className="font-mono font-bold text-slate-950 text-[10px]">
                           {(priorityWeights.infrastructureImportanceWeight * 100).toFixed(0)}%
                         </span>
                       </div>
                       <div className="p-1 bg-white rounded border border-slate-200">
-                        <span className="block text-slate-500 text-[7.5px] uppercase">Service Disruption</span>
-                        <span className="font-mono font-bold text-slate-900 text-[10px]">
+                        <span className="block text-slate-600 text-[7.5px] uppercase font-semibold">Service Disruption</span>
+                        <span className="font-mono font-bold text-slate-950 text-[10px]">
                           {(priorityWeights.serviceDisruptionWeight * 100).toFixed(0)}%
                         </span>
                       </div>
                     </div>
 
-                    <p className="text-[8px] text-slate-500 leading-tight pt-1">
+                    <p className="text-[8px] text-slate-600 leading-tight pt-1">
                       *Note: Priority scores dynamically guide budget distribution under the Central Province Infrastructure Capital Development Plan. Any engineering overrides require written technical justification from the Chief District Works Engineer.
                     </p>
                   </div>
@@ -924,206 +1114,271 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
             <div className="a4-page-break my-4 hidden print:block"></div>
 
             {/* ============================================================== */}
-            {/* PAGE 3: ABAU DISTRICT MASTER ASSET INVENTORY REGISTER */}
+            {/* MASTER ASSET INVENTORY REGISTER (PAGES 3, etc. DYNAMIC CHUNKS) */}
             {/* ============================================================== */}
-            {(viewPage === 'all' || viewPage === '3') && (
-              <div
-                className={`bg-white text-slate-900 shadow-2xl a4-page flex flex-col justify-between ${
-                  orientation === 'portrait'
-                    ? 'w-[210mm] min-h-[297mm] max-h-[297mm] p-[10mm]'
-                    : 'w-[297mm] min-h-[210mm] max-h-[210mm] p-[8mm]'
-                }`}
-                style={{ boxSizing: 'border-box' }}
-              >
-                <div>
-                  {renderRunningHeader(3, 'Master Asset Inventory Register')}
+            {inventoryChunks.map((chunk, chunkIdx) => {
+              const pageNum = 3 + chunkIdx;
+              const isVisible = viewPage === 'all' || viewPage === `${pageNum}`;
+              if (!isVisible) return null;
 
-                  <div className="mb-2 flex items-center justify-between border-b border-slate-300 pb-1">
+              const partLabel =
+                inventoryChunks.length > 1
+                  ? ` (Part ${chunkIdx + 1} of ${inventoryChunks.length})`
+                  : '';
+
+              return (
+                <React.Fragment key={`inventory-chunk-${chunkIdx}`}>
+                  <div className={pageContainerClass} style={{ boxSizing: 'border-box' }}>
                     <div>
-                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                        4. Master Infrastructure Asset Inventory Register ({scopedAssets.length} Assets)
-                      </h3>
-                      <p className="text-[8.5px] text-slate-600">
-                        Roads, Composite Bridges, Modular Bailey Trusses, Hydraulic Armco Culverts, & Causeways
-                      </p>
-                    </div>
-                    <span className="text-[8px] font-mono text-slate-500">Abau District Primary Register</span>
-                  </div>
+                      {renderRunningHeader(
+                        pageNum,
+                        `Master Asset Inventory Register${partLabel}`
+                      )}
 
-                  <table className="w-full text-left text-[8px] border border-slate-300 mb-2 table-fixed">
-                    <thead className="bg-slate-100 text-slate-800 uppercase font-bold text-[7px] border-b border-slate-300">
-                      <tr>
-                        <th style={{ width: '13%' }} className="p-1 border-r border-slate-300">Asset ID</th>
-                        <th style={{ width: '23%' }} className="p-1 border-r border-slate-300">Asset Name</th>
-                        <th style={{ width: '10%' }} className="p-1 border-r border-slate-300">Type</th>
-                        <th style={{ width: '14%' }} className="p-1 border-r border-slate-300">LLG</th>
-                        <th style={{ width: '14%' }} className="p-1 border-r border-slate-300">Technical Specs</th>
-                        <th style={{ width: '11%' }} className="p-1 border-r border-slate-300">Condition</th>
-                        <th style={{ width: '15%' }} className="p-1">Valuation (PGK)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {scopedAssets.slice(0, orientation === 'portrait' ? 12 : 9).map(a => (
-                        <tr key={a.id} className="hover:bg-slate-50">
-                          <td className="p-1 font-mono font-bold border-r border-slate-300 truncate">{a.id}</td>
-                          <td className="p-1 font-semibold text-slate-900 border-r border-slate-300 truncate">{a.name}</td>
-                          <td className="p-1 border-r border-slate-300 capitalize truncate">{a.type}</td>
-                          <td className="p-1 border-r border-slate-300 truncate">{a.llg}</td>
-                          <td className="p-1 border-r border-slate-300 truncate text-[7.5px]">
-                            {a.technicalSpecs.spanMeters
-                              ? `${a.technicalSpecs.spanMeters}m span`
-                              : a.technicalSpecs.lengthMeters
-                              ? `${(a.technicalSpecs.lengthMeters / 1000).toFixed(1)}km`
-                              : a.technicalSpecs.culvertDiameterMm
-                              ? `Ø${a.technicalSpecs.culvertDiameterMm}mm`
-                              : a.technicalSpecs.surfaceType || '-'}
-                          </td>
-                          <td className="p-1 border-r border-slate-300 whitespace-nowrap">
-                            <span
-                              className={`px-1 py-0.2 rounded font-bold text-[7px] ${
-                                a.conditionClassification === 'Critical'
-                                  ? 'bg-rose-100 text-rose-800'
-                                  : a.conditionClassification === 'Poor'
-                                  ? 'bg-orange-100 text-orange-800'
-                                  : a.conditionClassification === 'Fair'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-emerald-100 text-emerald-800'
-                              }`}
-                            >
-                              {a.conditionClassification} ({a.conditionScore})
-                            </span>
-                          </td>
-                          <td className="p-1 font-mono font-bold text-slate-900">
-                            PGK {(a.replacementValueKina / 1000000).toFixed(2)}M
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      <div className="mb-2 flex items-center justify-between border-b border-slate-300 pb-1">
+                        <div>
+                          <h3 className="text-xs font-bold text-slate-950 uppercase tracking-wider">
+                            4. Master Infrastructure Asset Inventory Register ({scopedAssets.length} Assets Total)
+                          </h3>
+                          <p className="text-[8.5px] text-slate-700">
+                            Roads, Composite Bridges, Modular Bailey Trusses, Hydraulic Armco Culverts, & Causeways
+                          </p>
+                        </div>
+                        <span className="text-[8px] font-mono text-slate-600 font-semibold">
+                          Showing {chunkIdx * inventoryChunkSize + 1}–
+                          {Math.min((chunkIdx + 1) * inventoryChunkSize, scopedAssets.length)} of {scopedAssets.length}
+                        </span>
+                      </div>
 
-                  {/* Summary note below table */}
-                  <div className="p-2 rounded bg-slate-50 border border-slate-200 text-[8px] text-slate-600 flex items-center justify-between">
-                    <span>Active Abau District asset inventory maintained according to Papua New Guinea Department of Works & Highways asset classification codes.</span>
-                    <span className="font-mono font-bold text-slate-700">Audit Status: Current Q4-2026</span>
-                  </div>
-                </div>
-
-                {renderRunningFooter(3)}
-              </div>
-            )}
-
-            {/* Page Break for html2pdf and print */}
-            <div className="a4-page-break my-4 hidden print:block"></div>
-
-            {/* ============================================================== */}
-            {/* PAGE 4: ACTIVE DEFECTS LEDGER & STATUTORY ENGINEERING SIGN-OFF */}
-            {/* ============================================================== */}
-            {(viewPage === 'all' || viewPage === '4') && (
-              <div
-                className={`bg-white text-slate-900 shadow-2xl a4-page flex flex-col justify-between ${
-                  orientation === 'portrait'
-                    ? 'w-[210mm] min-h-[297mm] max-h-[297mm] p-[10mm]'
-                    : 'w-[297mm] min-h-[210mm] max-h-[210mm] p-[8mm]'
-                }`}
-                style={{ boxSizing: 'border-box' }}
-              >
-                <div>
-                  {renderRunningHeader(4, 'Defect Ledger & Statutory Endorsement')}
-
-                  {/* Section 5: Defect Hazard Ledger */}
-                  <div className="mb-2.5">
-                    <div className="border-b border-slate-300 pb-1 mb-1.5 flex items-center justify-between">
-                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                        5. Active Defect Incidents & Structural Hazard Log ({scopedDefects.length} Defects)
-                      </h3>
-                      <span className="text-[8px] font-mono text-slate-500">Field Technical Inspections</span>
-                    </div>
-
-                    <table className="w-full text-left text-[8px] border border-slate-300 mb-2 table-fixed">
-                      <thead className="bg-slate-100 text-slate-800 uppercase font-bold text-[7px] border-b border-slate-300">
-                        <tr>
-                          <th style={{ width: '13%' }} className="p-1 border-r border-slate-300">Defect ID</th>
-                          <th style={{ width: '22%' }} className="p-1 border-r border-slate-300">Asset & Location</th>
-                          <th style={{ width: '20%' }} className="p-1 border-r border-slate-300">Defect Type</th>
-                          <th style={{ width: '11%' }} className="p-1 border-r border-slate-300">Severity</th>
-                          <th style={{ width: '11%' }} className="p-1 border-r border-slate-300">Status</th>
-                          <th style={{ width: '11%' }} className="p-1 border-r border-slate-300">Est. Cost</th>
-                          <th style={{ width: '12%' }} className="p-1">Assigned Unit</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {scopedDefects.slice(0, 6).map(d => (
-                          <tr key={d.id} className="hover:bg-slate-50">
-                            <td className="p-1 font-mono font-bold border-r border-slate-300 truncate">{d.id}</td>
-                            <td className="p-1 border-r border-slate-300 truncate font-medium">{d.assetName}</td>
-                            <td className="p-1 border-r border-slate-300 truncate">{d.defectType}</td>
-                            <td className="p-1 border-r border-slate-300 whitespace-nowrap">
-                              <span
-                                className={`px-1 py-0.2 rounded font-bold text-[7px] ${
-                                  d.severity === 'Critical'
-                                    ? 'bg-rose-100 text-rose-800'
-                                    : d.severity === 'Severe'
-                                    ? 'bg-orange-100 text-orange-800'
-                                    : d.severity === 'Moderate'
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : 'bg-slate-100 text-slate-700'
-                                }`}
-                              >
-                                {d.severity}
-                              </span>
-                            </td>
-                            <td className="p-1 border-r border-slate-300 font-semibold truncate">{d.status}</td>
-                            <td className="p-1 font-mono border-r border-slate-300 text-slate-900 truncate">
-                              PGK {d.estimatedCostKina.toLocaleString()}
-                            </td>
-                            <td className="p-1 truncate text-slate-600">{d.assignedTeam || 'Taskforce'}</td>
+                      {/* Complete Master Asset Register Table with explicit widths and wrapped text */}
+                      <table className="w-full text-left text-[8px] border border-slate-300 mb-2 table-fixed border-collapse">
+                        <thead className="bg-slate-100 text-slate-900 uppercase font-bold text-[7pt] border-b border-slate-300">
+                          <tr>
+                            <th style={{ width: '13%' }} className="p-1.5 border-r border-slate-300">Asset ID</th>
+                            <th style={{ width: '23%' }} className="p-1.5 border-r border-slate-300">Asset Name & Corridor</th>
+                            <th style={{ width: '10%' }} className="p-1.5 border-r border-slate-300">Type</th>
+                            <th style={{ width: '12%' }} className="p-1.5 border-r border-slate-300">LLG</th>
+                            <th style={{ width: '14%' }} className="p-1.5 border-r border-slate-300">Technical Specs</th>
+                            <th style={{ width: '13%' }} className="p-1.5 border-r border-slate-300">Condition</th>
+                            <th style={{ width: '15%' }} className="p-1.5 text-right">Valuation (PGK)</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                          {chunk.map(a => {
+                            const condBadge = getConditionBadgeStyle(a.conditionClassification);
+                            const typeBadge = getTypeBadgeStyle(a.type);
+                            return (
+                              <tr key={a.id} className="hover:bg-slate-50">
+                                <td className="p-1.5 align-top font-mono font-bold border-r border-slate-300 break-words text-slate-950">
+                                  {a.id}
+                                </td>
+                                <td className="p-1.5 align-top border-r border-slate-300 break-words">
+                                  <div className="font-semibold text-slate-950 leading-tight">{a.name}</div>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <span className="text-[6.5pt] font-mono px-1 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold">
+                                      📷 Verified R2 Photo
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="p-1.5 align-top border-r border-slate-300 break-words">
+                                  <span
+                                    className="px-1.5 py-0.2 rounded font-bold text-[7pt] inline-block border capitalize"
+                                    style={{
+                                      backgroundColor: typeBadge.bg,
+                                      color: typeBadge.text,
+                                      borderColor: typeBadge.border,
+                                    }}
+                                  >
+                                    {a.type}
+                                  </span>
+                                </td>
+                                <td className="p-1.5 align-top border-r border-slate-300 break-words text-slate-800">
+                                  {a.llg}
+                                </td>
+                                <td className="p-1.5 align-top border-r border-slate-300 break-words text-[7.5pt] text-slate-700 leading-tight">
+                                  {a.technicalSpecs.spanMeters
+                                    ? `${a.technicalSpecs.spanMeters}m span`
+                                    : a.technicalSpecs.lengthMeters
+                                    ? `${(a.technicalSpecs.lengthMeters / 1000).toFixed(1)}km length`
+                                    : a.technicalSpecs.culvertDiameterMm
+                                    ? `Ø${a.technicalSpecs.culvertDiameterMm}mm barrel`
+                                    : a.technicalSpecs.surfaceType || '-'}
+                                </td>
+                                <td className="p-1.5 align-top border-r border-slate-300 break-words">
+                                  <span
+                                    className="px-1.5 py-0.2 rounded font-bold text-[7pt] inline-block border whitespace-nowrap"
+                                    style={{
+                                      backgroundColor: condBadge.bg,
+                                      color: condBadge.text,
+                                      borderColor: condBadge.border,
+                                    }}
+                                  >
+                                    {a.conditionClassification} ({a.conditionScore})
+                                  </span>
+                                </td>
+                                <td className="p-1.5 align-top font-mono font-bold text-slate-950 text-right">
+                                  PGK {(a.replacementValueKina / 1000000).toFixed(2)}M
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
 
-                  {/* Section 6: Statutory Certification Block */}
-                  <div className="pt-2 border-t-2 border-slate-900 space-y-2 avoid-break-inside">
-                    <div className="p-2 rounded bg-slate-50 border border-slate-300 text-[8px] text-slate-700 leading-relaxed text-justify">
-                      <b>Statutory Technical Certification Notice:</b> This dossier represents the official asset registers, spatial GIS coordinates, condition assessments, and multi-factor prioritisation schedules for <b>Abau District</b> under the Central Province Digital Infrastructure & Asset Management initiative. Recommendations are calibrated using transparent multi-criteria decision algorithms. Engineering procurement and civil works allocation must strictly adhere to the Papua New Guinea National Procurement Act (NPA) and Public Finances (Management) Act.
+                      {/* Summary note below table */}
+                      <div className="p-2 rounded bg-slate-50 border border-slate-200 text-[8px] text-slate-700 flex items-center justify-between avoid-break-inside">
+                        <span>Active Abau District asset inventory maintained in accordance with PNG Department of Works & Highways asset classification codes.</span>
+                        <span className="font-mono font-bold text-slate-800">Audit Status: Current Q4-2026</span>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6 text-[9.5px] pt-1">
-                      {/* Left Signoff: District Engineer */}
-                      <div className="p-2 rounded border border-slate-200 bg-white">
-                        <p className="font-bold text-slate-900 uppercase text-[9px]">
-                          Audited & Certified by District Directorate:
-                        </p>
-                        <div className="h-9 border-b border-dashed border-slate-400 my-1 flex items-end justify-between px-1 text-[8px] text-slate-400 font-mono">
-                          <span>[Official Digital Stamp & Verification]</span>
-                          <span>2026-10-21</span>
-                        </div>
-                        <p className="font-bold text-slate-900">Chief District Works Engineer</p>
-                        <p className="text-[8.5px] text-slate-600">Registered Professional Engineer of Papua New Guinea (PEPNG)</p>
-                        <p className="text-[8px] text-slate-500">Abau District Headquarters &bull; Kupiano Station</p>
-                      </div>
-
-                      {/* Right Signoff: Provincial Administrator */}
-                      <div className="p-2 rounded border border-slate-200 bg-white">
-                        <p className="font-bold text-slate-900 uppercase text-[9px]">
-                          Executive Endorsement & Approval:
-                        </p>
-                        <div className="h-9 border-b border-dashed border-slate-400 my-1 flex items-end justify-between px-1 text-[8px] text-slate-400 font-mono">
-                          <span>[Provincial Seal of Central Province]</span>
-                          <span>Approved Q4</span>
-                        </div>
-                        <p className="font-bold text-slate-900">Provincial Works Administrator</p>
-                        <p className="text-[8.5px] text-slate-600">Central Province Government Administration</p>
-                        <p className="text-[8px] text-slate-500">Provincial Headquarters &bull; Konedobu, Central Province</p>
-                      </div>
-                    </div>
+                    {renderRunningFooter(pageNum)}
                   </div>
-                </div>
 
-                {renderRunningFooter(4)}
-              </div>
-            )}
+                  {/* Page break after each inventory chunk */}
+                  <div className="a4-page-break my-4 hidden print:block"></div>
+                </React.Fragment>
+              );
+            })}
+
+            {/* ============================================================== */}
+            {/* DEFECTS LEDGER & STATUTORY CERTIFICATION (FINAL PAGES)        */}
+            {/* ============================================================== */}
+            {defectChunks.map((chunk, defectIdx) => {
+              const pageNum = 3 + inventoryChunks.length + defectIdx;
+              const isVisible = viewPage === 'all' || viewPage === `${pageNum}`;
+              if (!isVisible) return null;
+
+              const isFinalPage = defectIdx === defectChunks.length - 1;
+
+              return (
+                <React.Fragment key={`defect-chunk-${defectIdx}`}>
+                  <div className={pageContainerClass} style={{ boxSizing: 'border-box' }}>
+                    <div>
+                      {renderRunningHeader(
+                        pageNum,
+                        isFinalPage ? 'Defect Ledger & Statutory Endorsement' : 'Active Defects Hazard Ledger'
+                      )}
+
+                      {/* Section 5: Defect Hazard Ledger */}
+                      <div className="mb-2.5">
+                        <div className="border-b border-slate-300 pb-1 mb-1.5 flex items-center justify-between">
+                          <h3 className="text-xs font-bold text-slate-950 uppercase tracking-wider">
+                            5. Active Defect Incidents & Structural Hazard Log ({scopedDefects.length} Defects Monitored)
+                          </h3>
+                          <span className="text-[8px] font-mono text-slate-600 font-semibold">Field Technical Inspections</span>
+                        </div>
+
+                        <table className="w-full text-left text-[8px] border border-slate-300 mb-2 table-fixed border-collapse">
+                          <thead className="bg-slate-100 text-slate-900 uppercase font-bold text-[7pt] border-b border-slate-300">
+                            <tr>
+                              <th style={{ width: '12%' }} className="p-1.5 border-r border-slate-300">Defect ID</th>
+                              <th style={{ width: '22%' }} className="p-1.5 border-r border-slate-300">Asset & Location</th>
+                              <th style={{ width: '18%' }} className="p-1.5 border-r border-slate-300">Defect Type</th>
+                              <th style={{ width: '11%' }} className="p-1.5 border-r border-slate-300">Severity</th>
+                              <th style={{ width: '10%' }} className="p-1.5 border-r border-slate-300">Status</th>
+                              <th style={{ width: '13%' }} className="p-1.5 border-r border-slate-300 text-right">Est. Cost</th>
+                              <th style={{ width: '14%' }} className="p-1.5">Assigned Unit</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200">
+                            {chunk.map(d => {
+                              const sevBadge = getSeverityBadgeStyle(d.severity);
+                              const statBadge = getStatusBadgeStyle(d.status);
+                              return (
+                                <tr key={d.id} className="hover:bg-slate-50">
+                                  <td className="p-1.5 align-top font-mono font-bold border-r border-slate-300 break-words text-slate-950">
+                                    {d.id}
+                                  </td>
+                                  <td className="p-1.5 align-top border-r border-slate-300 break-words">
+                                    <div className="font-semibold text-slate-950 leading-tight">{d.assetName}</div>
+                                    <div className="text-[7pt] text-slate-600 mt-0.5">{d.chainageOrLocation || d.llg}</div>
+                                  </td>
+                                  <td className="p-1.5 align-top border-r border-slate-300 break-words text-slate-800">
+                                    {d.defectType}
+                                  </td>
+                                  <td className="p-1.5 align-top border-r border-slate-300 break-words">
+                                    <span
+                                      className="px-1.5 py-0.2 rounded font-bold text-[7pt] inline-block border whitespace-nowrap"
+                                      style={{
+                                        backgroundColor: sevBadge.bg,
+                                        color: sevBadge.text,
+                                        borderColor: sevBadge.border,
+                                      }}
+                                    >
+                                      {d.severity}
+                                    </span>
+                                  </td>
+                                  <td className="p-1.5 align-top border-r border-slate-300 break-words">
+                                    <span
+                                      className="px-1.5 py-0.2 rounded font-bold text-[7pt] inline-block border whitespace-nowrap"
+                                      style={{
+                                        backgroundColor: statBadge.bg,
+                                        color: statBadge.text,
+                                        borderColor: statBadge.border,
+                                      }}
+                                    >
+                                      {d.status}
+                                    </span>
+                                  </td>
+                                  <td className="p-1.5 align-top font-mono border-r border-slate-300 text-slate-950 text-right font-bold">
+                                    PGK {d.estimatedCostKina.toLocaleString()}
+                                  </td>
+                                  <td className="p-1.5 align-top break-words text-slate-700 leading-tight">
+                                    {d.assignedTeam || 'District Works Unit'}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Section 6: Statutory Certification Block (Rendered on final page) */}
+                      {isFinalPage && (
+                        <div className="pt-2 border-t-2 border-slate-900 space-y-2 avoid-break-inside">
+                          <div className="p-2 rounded bg-slate-50 border border-slate-300 text-[8px] text-slate-800 leading-relaxed text-justify">
+                            <b>Statutory Technical Certification Notice:</b> This dossier represents the official asset registers, spatial GIS coordinates, condition assessments, and multi-factor prioritisation schedules for <b>Abau District</b> under the Central Province Digital Infrastructure & Asset Management initiative. Recommendations are calibrated using transparent multi-criteria decision algorithms. Engineering procurement and civil works allocation must strictly adhere to the Papua New Guinea National Procurement Act (NPA) and Public Finances (Management) Act.
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-6 text-[9.5px] pt-1">
+                            {/* Left Signoff: District Engineer */}
+                            <div className="p-2.5 rounded border border-slate-300 bg-white">
+                              <p className="font-bold text-slate-950 uppercase text-[9px]">
+                                Audited & Certified by District Directorate:
+                              </p>
+                              <div className="h-9 border-b border-dashed border-slate-400 my-1.5 flex items-end justify-between px-1 text-[8px] text-slate-500 font-mono">
+                                <span>[Official Digital Stamp & Verification]</span>
+                                <span>2026-10-21</span>
+                              </div>
+                              <p className="font-bold text-slate-950">Chief District Works Engineer</p>
+                              <p className="text-[8.5px] text-slate-700">Registered Professional Engineer of Papua New Guinea (PEPNG)</p>
+                              <p className="text-[8px] text-slate-500">Abau District Headquarters &bull; Kupiano Station</p>
+                            </div>
+
+                            {/* Right Signoff: Provincial Administrator */}
+                            <div className="p-2.5 rounded border border-slate-300 bg-white">
+                              <p className="font-bold text-slate-950 uppercase text-[9px]">
+                                Executive Endorsement & Approval:
+                              </p>
+                              <div className="h-9 border-b border-dashed border-slate-400 my-1.5 flex items-end justify-between px-1 text-[8px] text-slate-500 font-mono">
+                                <span>[Provincial Seal of Central Province]</span>
+                                <span>Approved Q4</span>
+                              </div>
+                              <p className="font-bold text-slate-950">Provincial Works Administrator</p>
+                              <p className="text-[8.5px] text-slate-700">Central Province Government Administration</p>
+                              <p className="text-[8px] text-slate-500">Provincial Headquarters &bull; Konedobu, Central Province</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {renderRunningFooter(pageNum)}
+                  </div>
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
       </div>

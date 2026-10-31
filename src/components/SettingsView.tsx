@@ -33,6 +33,7 @@ export const SettingsView: React.FC = () => {
     resetDemoData,
     exportDataAsJson,
     assets,
+    notifyToast,
   } = useApp();
 
   // Local weights state
@@ -44,6 +45,7 @@ export const SettingsView: React.FC = () => {
     e.preventDefault();
     updateWeights(weights);
     setWeightsSaved(true);
+    notifyToast('success', 'Model Weights Updated', 'Multi-factor priority ranking formula recalculated.');
     setTimeout(() => setWeightsSaved(false), 3000);
   };
 
@@ -51,6 +53,7 @@ export const SettingsView: React.FC = () => {
     setWeights(DEFAULT_WEIGHTS);
     updateWeights(DEFAULT_WEIGHTS);
     setWeightsSaved(true);
+    notifyToast('info', 'Weights Reset', 'Restored statutory default priority model weights.');
     setTimeout(() => setWeightsSaved(false), 3000);
   };
 
@@ -59,8 +62,10 @@ export const SettingsView: React.FC = () => {
     const result = await syncQueueNow();
     if (result.success) {
       setSyncStatusMsg(`Successfully synchronized ${result.count} offline records to the central registry.`);
+      notifyToast('success', 'Synchronization Complete', `Uploaded ${result.count} offline records.`);
     } else {
       setSyncStatusMsg('Sync aborted: device is currently offline.');
+      notifyToast('warning', 'Device Offline', 'Field records remain staged safely in local queue.');
     }
     setTimeout(() => setSyncStatusMsg(null), 4000);
   };

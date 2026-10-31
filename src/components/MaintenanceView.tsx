@@ -26,6 +26,7 @@ export const MaintenanceView: React.FC = () => {
     currentUserRole,
     setSelectedAssetId,
     setActiveTab,
+    notifyToast,
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,11 +42,20 @@ export const MaintenanceView: React.FC = () => {
     if (!overrideAsset) return;
 
     if (!overrideReason.trim()) {
-      alert('A recorded engineering justification is mandatory for priority override.');
+      notifyToast(
+        'error',
+        'Justification Required',
+        'A formal engineering justification is mandatory to execute a priority override.'
+      );
       return;
     }
 
     overridePriority(overrideAsset.id, targetPriority, overrideReason.trim());
+    notifyToast(
+      'success',
+      'Priority Overridden',
+      `Asset ${overrideAsset.id} set to ${targetPriority} priority.`
+    );
     setOverrideAsset(null);
     setOverrideReason('');
   };

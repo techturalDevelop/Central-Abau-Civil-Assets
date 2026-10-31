@@ -197,4 +197,14 @@ export type UserRole =
 
 export type CoreModule = 'infrastructure' | 'el_nino';
 
+export type ToastType = 'success' | 'error' | 'info' | 'warning';
+
+export interface ToastNotification {
+  id: string;
+  type: ToastType;
+  title: string;
+  message?: string;
+  timestamp: number;
+}
+
 export * from './elnino';
